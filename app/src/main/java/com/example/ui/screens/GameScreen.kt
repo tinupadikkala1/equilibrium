@@ -267,7 +267,6 @@ fun GameScreen(
                             if (hintLeft > 0) onHint()
                             else onShowRewardedAd("hint") { amount ->
                                 onEarnReward("hint", amount)
-                                onHint()
                             }
                         }
                     }
