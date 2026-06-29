@@ -329,7 +329,6 @@ class GameViewModel(
     fun triggerHint() {
         val currentBoard = boardState.value ?: return
         val isZen = gameDifficulty.value == Difficulty.ZEN
-        if (!isZen && hintsUsedThisLevel.value >= 2) return
 
         val getHintAction = {
             hintsUsedThisLevel.value += 1
@@ -349,9 +348,10 @@ class GameViewModel(
             // Zen mode: hints are always free, no limit
             getHintAction()
         } else {
+            // Master mode: consume from economy
             economyController.consumeHint(
                 onSuccess = getHintAction,
-                onFailure = { /* No hints left — UI should show ad option */ }
+                onFailure = { /* No hints left — UI handles showing ad */ }
             )
         }
     }

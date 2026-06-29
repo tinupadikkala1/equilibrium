@@ -250,27 +250,24 @@ fun GameScreen(
                 // HINT
                 val hintLeft = userStats?.hints ?: 5
                 val isZen = difficultyMode == GameViewModel.Difficulty.ZEN
-                val limitReached = !isZen && hintsUsedThisLevel >= 2
                 ActionButton(
                     label = "HINT",
                     subtitle = when {
                         isZen -> "∞ Free"
-                        limitReached -> "2/2 Max"
                         hintLeft > 0 -> "$hintLeft left"
                         else -> "▶ Ad +3"
                     },
                     icon = Icons.Default.Star,
                     accentColor = AccentGold,
-                    enabled = isZen || !limitReached,
                     modifier = Modifier.weight(1f),
                     testTag = "hint_button",
                     onClick = {
                         if (isZen) onHint()
-                        else if (!limitReached) {
+                        else {
                             if (hintLeft > 0) onHint()
                             else onShowRewardedAd("hint") { amount ->
                                 onEarnReward("hint", amount)
-                                onHint() // auto-use one hint after ad
+                                onHint()
                             }
                         }
                     }
