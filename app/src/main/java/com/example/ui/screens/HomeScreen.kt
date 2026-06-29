@@ -123,7 +123,7 @@ fun HomeScreen(
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Neon Pulse" to ActionNeonCyan, "Pastel Breeze" to PastelCyan, "Minimal Mono" to MonoAccent, "Midnight" to MidnightPrimary, "Forest" to ForestPrimary, "Sunset" to SunsetPrimary).forEach { (name, color) ->
                     val sel = userStats?.themeName == name
-                    Surface(shape = RoundedCornerShape(10.dp), color = if (sel) color.copy(0.12f) else SurfaceGradientStart, border = BorderStroke(if (sel) 2.dp else 1.dp, if (sel) color else Color.White.copy(0.06f)), modifier = Modifier.width(100.dp).clickable { onSwitchTheme(name) }) {
+                    Surface(shape = RoundedCornerShape(10.dp), color = if (sel) color.copy(0.12f) else SurfaceGradientStart, border = BorderStroke(if (sel) 2.dp else 1.dp, if (sel) color else Color.White.copy(0.06f)), modifier = Modifier.width(120.dp).clickable { onSwitchTheme(name) }) {
                         Column(Modifier.padding(10.dp)) { Text(name, color = if (sel) color else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace) }
                     }
                 }
