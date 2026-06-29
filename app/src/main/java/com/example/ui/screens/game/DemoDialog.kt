@@ -18,127 +18,63 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.engine.GameRules
 import com.example.ui.components.AnimatedTile
-import com.example.ui.theme.ActionNeonCyan
-import com.example.ui.theme.ActionNeonMint
-import com.example.ui.theme.SlateMutedText
+import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 
 @Composable
 fun DemoDialog(onDismiss: () -> Unit) {
-    // Predefined 3x3 board: starts scrambled, solved in 4 taps
-    // Start from solved [5,5,5 / 5,5,5 / 5,5,5], apply reverse taps at (1,1),(0,0),(2,2),(1,0)
-    val initialBoard = arrayOf(
-        intArrayOf(4, 4, 5),
-        intArrayOf(3, 7, 4),
-        intArrayOf(5, 4, 4)
-    )
-    // Solution: tap (1,1), (1,1), (0,0), (1,0) — but let's use a cleaner 4-move sequence
-    // Actually let's generate a proper demo: start solved, reverse-tap 4 times, record moves
     val moves = listOf(Pair(1, 1), Pair(0, 1), Pair(2, 1), Pair(1, 0))
-
-    // Build the starting board by applying reverse taps to [5,5,5...]
     val startBoard = remember {
-        val board = Array(3) { IntArray(3) { 5 } }
-        moves.forEach { (r, c) -> GameRules.applyReverseTap(board, r, c) }
-        board
+        val b = Array(3) { IntArray(3) { 5 } }
+        moves.forEach { (r, c) -> GameRules.applyReverseTap(b, r, c) }
+        b
     }
-
     var board by remember { mutableStateOf(startBoard.map { it.clone() }.toTypedArray()) }
-    var moveIndex by remember { mutableStateOf(-1) }
+    var moveIdx by remember { mutableStateOf(-1) }
     var won by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("Watch how the game is played!") }
-
+    var msg by remember { mutableStateOf("Watch how the game works!") }
     val progress = remember(board) { GameRules.calculateProgress(board) }
 
-    // Auto-play moves with delays
     LaunchedEffect(Unit) {
-        delay(2000) // Initial pause
+        delay(2000)
         for (i in moves.indices) {
-            message = "Tap ${i + 1}/${moves.size}: Row ${moves[i].first + 1}, Col ${moves[i].second + 1}"
-            moveIndex = i
-            delay(1500) // Pause before tap
-            // Apply tap
-            val newBoard = board.map { it.clone() }.toTypedArray()
-            GameRules.applyTap(newBoard, moves[i].first, moves[i].second)
-            board = newBoard
-            delay(800) // Pause after tap to see result
+            msg = "Tap ${i + 1}/${moves.size} → Row ${moves[i].first + 1}, Col ${moves[i].second + 1}"
+            moveIdx = i
+            delay(1500)
+            val nb = board.map { it.clone() }.toTypedArray()
+            GameRules.applyTap(nb, moves[i].first, moves[i].second)
+            board = nb
+            delay(800)
         }
-        // Check win
-        if (GameRules.checkWinCondition(board)) {
-            won = true
-            message = "🎉 EQUILIBRIUM FOUND!"
-        }
+        if (GameRules.checkWinCondition(board)) { won = true; msg = "🎉 EQUILIBRIUM FOUND!" }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.9f)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (won) {
-                ConfettiOverlay()
-            }
-
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth().padding(24.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("DEMO", color = ActionNeonCyan, fontSize = 20.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(0.92f)), contentAlignment = Alignment.Center) {
+            if (won) ConfettiOverlay()
+            Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = SurfaceGradientStart), modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+                Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("DEMO", color = ActionNeonCyan, fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
                     Spacer(Modifier.height(4.dp))
-                    Text(message, color = if (won) ActionNeonMint else SlateMutedText, fontSize = 12.sp, textAlign = TextAlign.Center, fontFamily = FontFamily.Monospace)
-
-                    Spacer(Modifier.height(16.dp))
-
-                    // Grid
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.8f)
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.background)
-                            .padding(8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(modifier = Modifier.fillMaxSize()) {
+                    Text(msg, color = if (won) ActionNeonMint else SlateMutedText, fontSize = 11.sp, textAlign = TextAlign.Center, fontFamily = FontFamily.Monospace)
+                    Spacer(Modifier.height(14.dp))
+                    Box(Modifier.fillMaxWidth(0.75f).aspectRatio(1f).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.background).padding(6.dp), contentAlignment = Alignment.Center) {
+                        Column(Modifier.fillMaxSize()) {
                             for (r in 0 until 3) {
-                                Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                Row(Modifier.weight(1f).fillMaxWidth()) {
                                     for (c in 0 until 3) {
-                                        val isHighlighted = moveIndex >= 0 && moveIndex < moves.size && moves[moveIndex] == Pair(r, c) && !won
-                                        Box(modifier = Modifier.weight(1f)) {
-                                            AnimatedTile(
-                                                value = board[r][c],
-                                                progress = progress,
-                                                isHintHighlighted = isHighlighted,
-                                                onTap = { /* Demo is non-interactive */ }
-                                            )
+                                        Box(Modifier.weight(1f)) {
+                                            AnimatedTile(board[r][c], progress, moveIdx >= 0 && moveIdx < moves.size && moves[moveIdx] == Pair(r, c) && !won, onTap = {})
                                         }
                                     }
                                 }
                             }
                         }
                     }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // Progress
-                    Text("Balance: ${(progress * 100).toInt()}%", color = ActionNeonCyan, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-
-                    Spacer(Modifier.height(16.dp))
-
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (won) ActionNeonMint else ActionNeonCyan),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(44.dp)
-                    ) {
+                    Spacer(Modifier.height(10.dp))
+                    Text("Balance: ${(progress * 100).toInt()}%", color = ActionNeonCyan.copy(0.7f), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(Modifier.height(14.dp))
+                    Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = if (won) ActionNeonMint else ActionNeonCyan), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(42.dp)) {
                         Text(if (won) "GOT IT!" else "SKIP", color = Color.Black, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                     }
                 }

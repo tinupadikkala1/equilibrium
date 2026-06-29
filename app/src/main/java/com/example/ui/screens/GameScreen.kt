@@ -1,10 +1,8 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -13,8 +11,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -27,11 +27,7 @@ import com.example.data.database.UserStats
 import com.example.data.engine.GameRules
 import com.example.ui.components.AdmobBanner
 import com.example.ui.components.AnimatedTile
-import com.example.ui.theme.AccentGold
-import com.example.ui.theme.ActionNeonCyan
-import com.example.ui.theme.ActionNeonMint
-import com.example.ui.theme.ActionNeonCoral
-import com.example.ui.theme.SlateMutedText
+import com.example.ui.theme.*
 import com.example.ui.viewmodel.GameViewModel
 import com.example.ui.screens.game.WinDialog
 import com.example.ui.screens.game.PauseSettingsDialog
@@ -40,33 +36,18 @@ import com.example.ui.screens.game.TutorialOverlay
 
 @Composable
 fun GameScreen(
-    levelId: Int,
-    gridSize: Int,
-    par: Int,
-    movesCount: Int,
-    board: Array<IntArray>?,
-    winState: Boolean,
-    starredScore: Int,
-    highlightedCell: Pair<Int, Int>?,
-    userStats: UserStats?,
-    secondsElapsed: Int,
-    hintsUsedThisLevel: Int,
-    bestTimeSeconds: Int,
+    levelId: Int, gridSize: Int, par: Int, movesCount: Int,
+    board: Array<IntArray>?, winState: Boolean, starredScore: Int,
+    highlightedCell: Pair<Int, Int>?, userStats: UserStats?,
+    secondsElapsed: Int, hintsUsedThisLevel: Int, bestTimeSeconds: Int,
     previousBestMoves: Int = 0,
-    onCellTapped: (Int, Int) -> Unit,
-    onUndo: () -> Unit,
-    onReset: () -> Unit,
-    onHint: () -> Unit,
-    onSkip: () -> Unit,
-    onToggleSound: (Boolean) -> Unit,
-    onToggleHaptic: (Boolean) -> Unit,
-    onNextLevel: () -> Unit,
-    onEarnReward: (String, Int) -> Unit,
-    onBack: () -> Unit,
+    onCellTapped: (Int, Int) -> Unit, onUndo: () -> Unit, onReset: () -> Unit,
+    onHint: () -> Unit, onSkip: () -> Unit,
+    onToggleSound: (Boolean) -> Unit, onToggleHaptic: (Boolean) -> Unit,
+    onNextLevel: () -> Unit, onEarnReward: (String, Int) -> Unit, onBack: () -> Unit,
     isDailyChallenge: Boolean = false,
     difficultyMode: GameViewModel.Difficulty = GameViewModel.Difficulty.ZEN,
-    countdownSecondsLeft: Int? = null,
-    isTimeUp: Boolean = false,
+    countdownSecondsLeft: Int? = null, isTimeUp: Boolean = false,
     onChangeDifficulty: ((GameViewModel.Difficulty) -> Unit)? = null,
     onShowRewardedAd: (String, (Int) -> Unit) -> Unit,
     onShowInterstitialAd: (() -> Unit) -> Unit,
@@ -75,137 +56,94 @@ fun GameScreen(
     var showPauseSettings by remember { mutableStateOf(false) }
     var tutorialActive by remember { mutableStateOf(levelId == 1 && !isDailyChallenge) }
     var tutorialStep by remember { mutableStateOf(1) }
-
-    val progress = remember(board) {
-        if (board != null) GameRules.calculateProgress(board) else 0.0f
-    }
+    val progress = remember(board) { if (board != null) GameRules.calculateProgress(board) else 0f }
+    val progressColor = lerp(ActionNeonCoral, ActionNeonMint, progress)
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = { AdmobBanner(modifier = Modifier.navigationBarsPadding()) }
-    ) { innerPadding ->
+    ) { padding ->
         Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
+            modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
 
-            // ─── TOP BAR: Back + Title + Settings ───
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack, modifier = Modifier.size(40.dp).testTag("back_button")) {
-                    Icon(Icons.Default.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onBackground)
+            // ─── TOP BAR ───
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack, Modifier.size(40.dp).testTag("back_button")) {
+                    Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
                 }
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Text(
-                        text = if (isDailyChallenge) "DAILY" else "STAGE $levelId",
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.testTag("stage_title")
+                        if (isDailyChallenge) "DAILY · ${formatDateKey(levelId)}" else "STAGE $levelId",
+                        color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace, modifier = Modifier.testTag("stage_title")
                     )
-                    if (isDailyChallenge) {
-                        Text(
-                            text = formatDateKey(levelId),
-                            color = SlateMutedText,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
                 }
-
-                IconButton(onClick = { showPauseSettings = true }, modifier = Modifier.size(40.dp).testTag("settings_menu_button")) {
-                    Icon(Icons.Default.Settings, "Settings", tint = MaterialTheme.colorScheme.onBackground)
+                IconButton(onClick = { showPauseSettings = true }, Modifier.size(40.dp).testTag("settings_menu_button")) {
+                    Icon(Icons.Default.Settings, "Settings", tint = Color.White)
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // ─── STATS ROW ───
+            // ─── STATS ROW with gradient bg ───
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Brush.horizontalGradient(listOf(SurfaceGradientStart, SurfaceGradientEnd)))
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                StatItem("MOVES", "$movesCount", MaterialTheme.colorScheme.onSurface)
-                StatItem("BALANCE", "${(progress * 100).toInt()}%", if (progress >= 1.0f) ActionNeonMint else ActionNeonCyan)
-                StatItem("PAR", "$par", AccentGold)
+                StatCell("MOVES", "$movesCount", Color.White)
+                StatCell("BALANCE", "${(progress * 100).toInt()}%", progressColor)
+                StatCell("PAR", "$par", AccentGold)
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            // ─── PROGRESS BAR ───
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp).height(3.dp).clip(RoundedCornerShape(2.dp)),
+                color = progressColor,
+                trackColor = MaterialTheme.colorScheme.surface,
+            )
 
             // ─── TIMER ROW ───
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 val isMaster = difficultyMode == GameViewModel.Difficulty.MASTER
                 Text(
-                    text = if (isMaster) "⏱ ${formatTime(countdownSecondsLeft ?: 0)}" else "⏱ ${formatTime(secondsElapsed)}",
+                    if (isMaster) "⏱ ${formatTime(countdownSecondsLeft ?: 0)}" else "⏱ ${formatTime(secondsElapsed)}",
                     color = if (isMaster && (countdownSecondsLeft ?: 99) <= 15) ActionNeonCoral else SlateMutedText,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.testTag("game_timer")
+                    fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace
                 )
-                Text(
-                    text = if (bestTimeSeconds > 0) "Best: ${formatTime(bestTimeSeconds)}" else "",
-                    color = AccentGold.copy(alpha = 0.7f),
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.testTag("best_time")
-                )
+                if (bestTimeSeconds > 0) Text("Best: ${formatTime(bestTimeSeconds)}", color = AccentGold.copy(0.7f), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             }
 
-            Spacer(modifier = Modifier.weight(0.05f))
+            Spacer(Modifier.weight(0.04f))
 
             // ─── GAME GRID ───
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
                     .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(20.dp))
-                    .padding(12.dp),
+                    .padding(10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 if (board != null) {
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    Column(Modifier.fillMaxSize()) {
                         for (r in 0 until gridSize) {
-                            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                            Row(Modifier.weight(1f).fillMaxWidth()) {
                                 for (c in 0 until gridSize) {
                                     val value = board[r][c]
                                     val isHighlight = tutorialActive && tutorialStep == 2 && r == 1 && c == 1
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .semantics { contentDescription = "Row ${r + 1}, Column ${c + 1}, value $value" }
-                                    ) {
-                                        AnimatedTile(
-                                            value = value,
-                                            progress = progress,
-                                            isHintHighlighted = (highlightedCell == Pair(r, c)) || isHighlight,
-                                            onTap = {
-                                                if (tutorialActive) {
-                                                    if (tutorialStep == 2 && r == 1 && c == 1) { onCellTapped(r, c); tutorialStep = 3 }
-                                                } else { onCellTapped(r, c) }
-                                            }
-                                        )
+                                    Box(Modifier.weight(1f).semantics { contentDescription = "Row ${r + 1}, Column ${c + 1}, value $value" }) {
+                                        AnimatedTile(value, progress, (highlightedCell == Pair(r, c)) || isHighlight, onTap = {
+                                            if (tutorialActive) { if (tutorialStep == 2 && r == 1 && c == 1) { onCellTapped(r, c); tutorialStep = 3 } }
+                                            else onCellTapped(r, c)
+                                        })
                                     }
                                 }
                             }
@@ -214,152 +152,70 @@ fun GameScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(0.05f))
+            Spacer(Modifier.weight(0.04f))
 
-            // ─── ACTION BUTTONS: Undo | Reset | Hint ───
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // UNDO
+            // ─── ACTION BUTTONS (pill style, inline icon+text+count) ───
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val undoLeft = userStats?.undos ?: 5
-                ActionButton(
-                    label = "UNDO",
-                    subtitle = if (undoLeft > 0) "$undoLeft left" else "▶ Ad +3",
-                    icon = Icons.Default.ArrowBack,
-                    accentColor = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f),
-                    testTag = "undo_button",
-                    onClick = {
-                        if (undoLeft > 0) onUndo()
-                        else onShowRewardedAd("undo") { onEarnReward("undo", it) }
-                    }
-                )
-
-                // RESET
-                ActionButton(
-                    label = "RESET",
-                    subtitle = "",
-                    icon = Icons.Default.Refresh,
-                    accentColor = ActionNeonCoral,
-                    modifier = Modifier.weight(1f),
-                    testTag = "reset_button",
-                    onClick = onReset
-                )
-
-                // HINT
                 val hintLeft = userStats?.hints ?: 5
                 val isZen = difficultyMode == GameViewModel.Difficulty.ZEN
-                ActionButton(
-                    label = "HINT",
-                    subtitle = when {
-                        isZen -> "∞ Free"
-                        hintLeft > 0 -> "$hintLeft left"
-                        else -> "▶ Ad +3"
-                    },
-                    icon = Icons.Default.Star,
-                    accentColor = AccentGold,
-                    modifier = Modifier.weight(1f),
-                    testTag = "hint_button",
-                    onClick = {
-                        if (isZen) onHint()
-                        else {
-                            if (hintLeft > 0) onHint()
-                            else onShowRewardedAd("hint") { amount ->
-                                onEarnReward("hint", amount)
-                            }
-                        }
-                    }
-                )
+
+                PillButton(Icons.Default.ArrowBack, "UNDO", if (undoLeft > 0) "($undoLeft)" else "▶+3", ActionNeonCyan, Modifier.weight(1f), "undo_button") {
+                    if (undoLeft > 0) onUndo() else onShowRewardedAd("undo") { onEarnReward("undo", it) }
+                }
+                PillButton(Icons.Default.Refresh, "RESET", "", ActionNeonCoral, Modifier.weight(1f), "reset_button") { onReset() }
+                PillButton(Icons.Default.Star, "HINT", if (isZen) "(∞)" else if (hintLeft > 0) "($hintLeft)" else "▶+3", AccentGold, Modifier.weight(1f), "hint_button") {
+                    if (isZen) onHint() else { if (hintLeft > 0) onHint() else onShowRewardedAd("hint") { onEarnReward("hint", it) } }
+                }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
         }
     }
 
     // ─── DIALOGS ───
     var showWinDialog by remember { mutableStateOf(false) }
-    LaunchedEffect(winState) {
-        if (winState) {
-            kotlinx.coroutines.delay(4000L)
-            showWinDialog = true
-        } else {
-            showWinDialog = false
-        }
-    }
+    LaunchedEffect(winState) { if (winState) { kotlinx.coroutines.delay(4000L); showWinDialog = true } else showWinDialog = false }
 
     if (showWinDialog) {
-        WinDialog(
-            starredScore = starredScore, movesCount = movesCount, par = par,
-            levelId = levelId, isDailyChallenge = isDailyChallenge,
-            previousBestMoves = previousBestMoves,
-            onNextLevel = onNextLevel, onReplay = onReset, onBack = onBack,
-            onShowInterstitialAd = onShowInterstitialAd,
-            onShowRewardedAd = { cb -> onShowRewardedAd("hint") { _ -> cb(0) } }
-        )
+        WinDialog(starredScore, movesCount, par, levelId, isDailyChallenge, previousBestMoves, onNextLevel, onReset, onBack, onShowInterstitialAd, { cb -> onShowRewardedAd("hint") { _ -> cb(0) } })
     }
     if (showPauseSettings) {
-        PauseSettingsDialog(
-            userStats = userStats, difficultyMode = difficultyMode,
-            onReset = onReset, onChangeDifficulty = onChangeDifficulty,
-            onToggleSound = onToggleSound, onToggleHaptic = onToggleHaptic,
-            onDismiss = { showPauseSettings = false }
-        )
+        PauseSettingsDialog(userStats, difficultyMode, onReset, onChangeDifficulty, onToggleSound, onToggleHaptic) { showPauseSettings = false }
     }
     if (isTimeUp && difficultyMode == GameViewModel.Difficulty.MASTER) {
-        TimeUpDialog(
-            onRetry = onReset, onBack = onBack,
-            onWatchAdForTime = { onShowRewardedAd("time") { _ -> onEarnReward("time", 30) } }
-        )
+        TimeUpDialog(onReset, onBack) { onShowRewardedAd("time") { _ -> onEarnReward("time", 30) } }
     }
     if (tutorialActive) {
-        TutorialOverlay(
-            tutorialStep = tutorialStep,
-            onNextStep = { tutorialStep = 2 },
-            onFinish = { tutorialActive = false },
-            onDismiss = { tutorialActive = false }
-        )
+        TutorialOverlay(tutorialStep, { tutorialStep = 2 }, { tutorialActive = false }, { tutorialActive = false })
     }
 }
 
 @Composable
-private fun StatItem(label: String, value: String, valueColor: Color) {
+private fun StatCell(label: String, value: String, valueColor: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = SlateMutedText, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        Text(value, color = valueColor, fontSize = 22.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+        Text(value, color = valueColor, fontSize = 20.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
     }
 }
 
 @Composable
-private fun ActionButton(
-    label: String,
-    subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    accentColor: Color,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    testTag: String = "",
-    onClick: () -> Unit
-) {
-    Button(
+private fun PillButton(icon: ImageVector, label: String, count: String, accent: Color, modifier: Modifier, tag: String, onClick: () -> Unit) {
+    OutlinedButton(
         onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.height(68.dp).testTag(testTag),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            disabledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f)
-        ),
-        border = BorderStroke(1.dp, accentColor.copy(alpha = if (enabled) 0.3f else 0.1f)),
-        shape = RoundedCornerShape(14.dp),
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+        modifier = modifier.height(54.dp).testTag(tag),
+        shape = RoundedCornerShape(27.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.4f)),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
+        contentPadding = PaddingValues(horizontal = 8.dp)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(icon, label, modifier = Modifier.size(16.dp), tint = if (enabled) accentColor else Color.Gray)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(label, fontSize = 11.sp, fontWeight = FontWeight.Black, color = if (enabled) Color.White else Color.Gray)
-            if (subtitle.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(1.dp))
-                Text(subtitle, fontSize = 9.sp, color = if (enabled) accentColor.copy(alpha = 0.9f) else Color.Gray, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Icon(icon, label, Modifier.size(14.dp), tint = accent)
+            Spacer(Modifier.width(4.dp))
+            Text(label, fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color.White)
+            if (count.isNotEmpty()) {
+                Spacer(Modifier.width(3.dp))
+                Text(count, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = accent)
             }
         }
     }
@@ -367,15 +223,12 @@ private fun ActionButton(
 
 private fun formatDateKey(dateKey: Int): String {
     if (dateKey < 10000000) return dateKey.toString()
-    val y = dateKey / 10000
-    val m = (dateKey % 10000) / 100
-    val d = dateKey % 100
+    val y = dateKey / 10000; val m = (dateKey % 10000) / 100; val d = dateKey % 100
     val months = listOf("", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
     return "${if (m in 1..12) months[m] else "$m"} $d, $y"
 }
 
 private fun formatTime(seconds: Int): String {
-    val m = seconds / 60
-    val s = seconds % 60
+    val m = seconds / 60; val s = seconds % 60
     return "${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}"
 }
