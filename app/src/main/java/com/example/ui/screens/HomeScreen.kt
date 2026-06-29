@@ -328,6 +328,12 @@ private fun SettingsDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    var showDemo by remember { mutableStateOf(false) }
+
+    if (showDemo) {
+        com.example.ui.screens.game.DemoDialog(onDismiss = { showDemo = false })
+    }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(24.dp),
@@ -347,6 +353,16 @@ private fun SettingsDialog(
                 SettingToggle("HAPTIC FEEDBACK", userStats?.hapticEnabled != false, onToggleHaptic)
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+                // Demo
+                Button(
+                    onClick = { showDemo = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = ActionNeonCyan.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(42.dp)
+                ) {
+                    Text("▶  DEMO — How to Play", color = ActionNeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
 
                 // Privacy Policy
                 TextButton(onClick = {

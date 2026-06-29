@@ -278,7 +278,17 @@ fun GameScreen(
     }
 
     // ─── DIALOGS ───
-    if (winState) {
+    var showWinDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(winState) {
+        if (winState) {
+            kotlinx.coroutines.delay(4000L)
+            showWinDialog = true
+        } else {
+            showWinDialog = false
+        }
+    }
+
+    if (showWinDialog) {
         WinDialog(
             starredScore = starredScore, movesCount = movesCount, par = par,
             levelId = levelId, isDailyChallenge = isDailyChallenge,
