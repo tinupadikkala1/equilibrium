@@ -225,7 +225,7 @@ fun GameScreen(
                 val undoLeft = userStats?.undos ?: 5
                 ActionButton(
                     label = "UNDO",
-                    subtitle = if (undoLeft > 0) "$undoLeft" else "Ad",
+                    subtitle = if (undoLeft > 0) "$undoLeft left" else "▶ Ad +3",
                     icon = Icons.Default.ArrowBack,
                     accentColor = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f),
@@ -254,10 +254,10 @@ fun GameScreen(
                 ActionButton(
                     label = "HINT",
                     subtitle = when {
-                        isZen -> "Free"
-                        limitReached -> "Max"
-                        hintLeft > 0 -> "$hintLeft"
-                        else -> "Ad +3"
+                        isZen -> "∞ Free"
+                        limitReached -> "2/2 Max"
+                        hintLeft > 0 -> "$hintLeft left"
+                        else -> "▶ Ad +3"
                     },
                     icon = Icons.Default.Star,
                     accentColor = AccentGold,
@@ -338,20 +338,22 @@ private fun ActionButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(56.dp).testTag(testTag),
+        modifier = modifier.height(68.dp).testTag(testTag),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.surface,
             disabledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f)
         ),
         border = BorderStroke(1.dp, accentColor.copy(alpha = if (enabled) 0.3f else 0.1f)),
-        shape = RoundedCornerShape(16.dp),
-        contentPadding = PaddingValues(4.dp)
+        shape = RoundedCornerShape(14.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, label, modifier = Modifier.size(18.dp), tint = if (enabled) accentColor else Color.Gray)
-            Text(label, fontSize = 10.sp, fontWeight = FontWeight.Black, color = if (enabled) Color.White else Color.Gray)
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(icon, label, modifier = Modifier.size(16.dp), tint = if (enabled) accentColor else Color.Gray)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(label, fontSize = 11.sp, fontWeight = FontWeight.Black, color = if (enabled) Color.White else Color.Gray)
             if (subtitle.isNotEmpty()) {
-                Text(subtitle, fontSize = 9.sp, color = if (enabled) accentColor.copy(alpha = 0.8f) else Color.Gray)
+                Spacer(modifier = Modifier.height(1.dp))
+                Text(subtitle, fontSize = 9.sp, color = if (enabled) accentColor.copy(alpha = 0.9f) else Color.Gray, fontWeight = FontWeight.Bold)
             }
         }
     }
