@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,10 +28,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.example.data.database.LevelProgress
 import com.example.data.database.UserStats
 import com.example.data.database.DailyChallengeProgress
+import com.example.data.engine.LevelGenerator
 import com.example.ui.components.AdmobBanner
 import com.example.ui.theme.AccentGold
 import com.example.ui.theme.ActionNeonCyan
@@ -62,13 +61,14 @@ fun HomeScreen(
     val highestCompletedLevel = levelProgressList.filter { it.completed }.maxOfOrNull { it.levelId } ?: 0
     val highestUnlockedLevel = highestCompletedLevel + 1
     val totalStars = levelProgressList.sumOf { it.stars }
-    val streakCount = userStats?.currentStreak ?: 0
+    val streakCount = userStats?.currentStreak ?: 1
+    val hintCount = userStats?.hints ?: 5
 
     val todayDateKey = remember {
         val cal = java.util.Calendar.getInstance()
         cal.get(java.util.Calendar.YEAR) * 10000 + (cal.get(java.util.Calendar.MONTH) + 1) * 100 + cal.get(java.util.Calendar.DAY_OF_MONTH)
     }
-    val dailyCompleted = dailyProgressList.any { it.dateKey == todayDateKey && it.completed }
+    val dailyLevel = remember(todayDateKey) { LevelGenerator.generateDailyLevel(todayDateKey) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -79,140 +79,225 @@ fun HomeScreen(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            // ─── HEADER ───
+            // ─── HEADER: EQUILIBRIUM + Streak Badge + Settings ───
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
                     Text(
                         text = "EQUILIBRIUM",
                         color = ActionNeonCyan,
-                        fontSize = 24.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 3.sp
+                        letterSpacing = 2.sp
                     )
                     Text(
-                        text = "One tap. Infinite ripples.",
+                        text = "One Tap. Infinite Ripples.",
                         color = SlateMutedText,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace
                     )
                 }
-                IconButton(onClick = { showSettingsDialog = true }) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Streak badge
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("⭐", fontSize = 14.sp)
+                            Text("${streakCount}D STREAK", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                    // Settings icon
+                    IconButton(onClick = { showSettingsDialog = true }, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ─── STATS PANEL ───
+            // ─── STATS CARD: Stars + Hints ───
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    StatColumn("⭐", "$totalStars", "Stars")
-                    StatColumn("🏆", "$highestCompletedLevel", "Cleared")
-                    StatColumn("🔥", "$streakCount", "Streak")
-                    StatColumn("💡", "${userStats?.hints ?: 5}", "Hints")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // ─── RESUME GAME BANNER ───
-            if (activeGameSave != null) {
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, ActionNeonMint.copy(alpha = 0.5f)),
-                    colors = CardDefaults.cardColors(containerColor = ActionNeonMint.copy(alpha = 0.08f)),
-                    modifier = Modifier.fillMaxWidth().clickable { onResumeGame() }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.PlayArrow, "Resume", tint = ActionNeonMint, modifier = Modifier.size(24.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("CONTINUE GAME", color = ActionNeonMint, fontWeight = FontWeight.Bold, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
-                            Text("Stage ${activeGameSave.levelId} · ${activeGameSave.movesCount} moves in", color = SlateMutedText, fontSize = 11.sp)
-                        }
-                        Icon(Icons.Default.ArrowForward, null, tint = ActionNeonMint)
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            // ─── DAILY CHALLENGE ───
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, AccentGold.copy(alpha = 0.4f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth().clickable { onSelectDailyLevel(todayDateKey) }
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("📅", fontSize = 22.sp)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("DAILY CHALLENGE", color = AccentGold, fontWeight = FontWeight.Bold, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
-                        Text(
-                            if (dailyCompleted) "✓ Completed today" else "New puzzle available!",
-                            color = if (dailyCompleted) ActionNeonMint else SlateMutedText,
-                            fontSize = 11.sp
-                        )
+                    // Total Stars
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("⭐", fontSize = 28.sp)
+                        Column {
+                            Text("TOTAL STARS", color = ActionNeonCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text("$totalStars Stars", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+                        }
                     }
-                    Icon(Icons.Default.ArrowForward, null, tint = AccentGold.copy(alpha = 0.6f))
+                    // Divider
+                    Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color.White.copy(alpha = 0.1f)))
+                    // Hint Tokens
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = ActionNeonCyan, modifier = Modifier.size(28.dp))
+                        Column {
+                            Text("HINT TOKENS", color = ActionNeonCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text("$hintCount Hints", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ─── LEVEL SELECT HEADER ───
-            Text(
-                text = "SELECT STAGE",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            // ─── SKIN SELECTION ───
+            Text("SKIN SELECTION", color = SlateMutedText, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val themes = listOf(
+                    Triple("Neon Pulse", "Default", ActionNeonCyan),
+                    Triple("Pastel Breeze", "Soft Pastel", Color(0xFF55EFC4)),
+                    Triple("Minimal Mono", "Retro Green", Color(0xFF00FF00)),
+                    Triple("Midnight", "Electric Indigo", Color(0xFF4D38EC)),
+                    Triple("Forest", "Deep Sage", Color(0xFF2EA671)),
+                    Triple("Sunset", "Warm Horizon", Color(0xFFFF5E62))
+                )
+                themes.forEach { (name, subtitle, color) ->
+                    val isSelected = userStats?.themeName == name
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) color else Color.White.copy(alpha = 0.08f)),
+                        colors = CardDefaults.cardColors(containerColor = if (isSelected) color.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface),
+                        modifier = Modifier.width(140.dp).clickable { onSwitchTheme(name) }
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text(subtitle, color = color, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                }
+            }
 
-            // ─── LEVEL GRID ───
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ─── DAILY EVENT ───
+            Text("DAILY EVENT", color = SlateMutedText, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.5.dp, ActionNeonCyan),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("📅", fontSize = 18.sp)
+                            Text("DAILY CHALLENGE", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+                        }
+                        Surface(shape = RoundedCornerShape(8.dp), color = ActionNeonCyan.copy(alpha = 0.15f)) {
+                            Text("LIVE TODAY", color = ActionNeonCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        "A brand new procedurally scrambled grid is live of dimensions ${dailyLevel.size}x${dailyLevel.size}. Standard rules apply—can you restore perfect harmony?",
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { onSelectDailyLevel(todayDateKey) },
+                        colors = ButtonDefaults.buttonColors(containerColor = ActionNeonCyan),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                    ) {
+                        Text("▶  PLAY EVENT", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ─── PUZZLE STAGES ───
+            Text("PUZZLE STAGES", color = SlateMutedText, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+
             val totalLevelsToShow = highestUnlockedLevel + 20
-
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
-                contentPadding = PaddingValues(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.weight(1f)
             ) {
                 items(totalLevelsToShow) { index ->
                     val levelNum = index + 1
                     val isLocked = levelNum > highestUnlockedLevel
                     val progress = levelProgressList.find { it.levelId == levelNum }
-                    val starsCount = progress?.stars ?: 0
+                    val stars = progress?.stars ?: 0
+                    val isCurrentLevel = levelNum == highestUnlockedLevel
 
-                    LevelSelectItem(
-                        levelId = levelNum,
-                        stars = starsCount,
-                        isLocked = isLocked,
-                        onClick = { if (!isLocked) onSelectLevel(levelNum) }
-                    )
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            if (isCurrentLevel) 1.5.dp else 1.dp,
+                            if (isCurrentLevel) ActionNeonMint else Color.White.copy(alpha = 0.06f)
+                        ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = when {
+                                isCurrentLevel -> ActionNeonMint.copy(alpha = 0.08f)
+                                stars > 0 -> MaterialTheme.colorScheme.surface
+                                else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                            }
+                        ),
+                        modifier = Modifier
+                            .aspectRatio(1f)
+                            .clickable(enabled = !isLocked) { onSelectLevel(levelNum) }
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            if (isLocked) {
+                                Icon(Icons.Default.Lock, null, tint = SlateMutedText.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
+                            } else {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("$levelNum", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                    if (stars > 0) {
+                                        Text(
+                                            "★".repeat(stars) + "☆".repeat(3 - stars),
+                                            fontSize = 9.sp,
+                                            color = AccentGold,
+                                            letterSpacing = 1.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -220,177 +305,86 @@ fun HomeScreen(
 
     // ─── SETTINGS DIALOG ───
     if (showSettingsDialog) {
-        Dialog(onDismissRequest = { showSettingsDialog = false }) {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.5.dp, ActionNeonCyan),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text("SETTINGS", color = ActionNeonCyan, fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, letterSpacing = 2.sp)
-
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-
-                    // Sound
-                    SettingRow("SOUND EFFECTS", userStats?.soundEnabled != false) { onToggleSound(it) }
-                    SettingRow("MUSIC", userStats?.musicEnabled != false) { onToggleMusic(it) }
-                    SettingRow("HAPTIC FEEDBACK", userStats?.hapticEnabled != false) { onToggleHaptic(it) }
-
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-
-                    // Themes
-                    Text("THEMES", color = SlateMutedText, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        val themes = listOf(
-                            "Neon Pulse" to ActionNeonCyan,
-                            "Pastel Breeze" to Color(0xFF81ECEC),
-                            "Minimal Mono" to Color(0xFF00FF00),
-                            "Midnight" to Color(0xFF4D38EC),
-                            "Forest" to Color(0xFF2EA671),
-                            "Sunset" to Color(0xFFFF5E62)
-                        )
-                        themes.forEach { (name, color) ->
-                            val isSelected = userStats?.themeName == name
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .border(if (isSelected) 3.dp else 0.dp, Color.White, CircleShape)
-                                    .clickable { onSwitchTheme(name) }
-                            )
-                        }
-                    }
-
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-
-                    // Privacy Policy
-                    val context = LocalContext.current
-                    TextButton(
-                        onClick = {
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://your-privacy-policy-url.com"))
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Privacy Policy", color = SlateMutedText, fontSize = 12.sp)
-                    }
-
-                    // Reset
-                    var showConfirmReset by remember { mutableStateOf(false) }
-                    if (!showConfirmReset) {
-                        TextButton(onClick = { showConfirmReset = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("RESET ALL PROGRESSION", color = ActionNeonCoral, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                        Text("This will permanently wipe all progress!", color = ActionNeonCoral, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { showConfirmReset = false }, shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
-                                Text("Cancel", color = Color.White, fontSize = 11.sp)
-                            }
-                            Button(onClick = { onResetAllData(); showSettingsDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = ActionNeonCoral), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
-                                Text("Yes, Reset", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Button(
-                        onClick = { showSettingsDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = ActionNeonMint),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(44.dp)
-                    ) {
-                        Text("CLOSE", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatColumn(emoji: String, value: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(emoji, fontSize = 16.sp)
-        Text(value, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
-        Text(label, color = SlateMutedText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-private fun LevelSelectItem(levelId: Int, stars: Int, isLocked: Boolean, onClick: () -> Unit) {
-    val bgColor = when {
-        isLocked -> MaterialTheme.colorScheme.surface.copy(alpha = 0.3f)
-        stars == 3 -> ActionNeonMint.copy(alpha = 0.12f)
-        stars > 0 -> ActionNeonCyan.copy(alpha = 0.08f)
-        else -> MaterialTheme.colorScheme.surface
-    }
-    val borderColor = when {
-        stars == 3 -> ActionNeonMint.copy(alpha = 0.5f)
-        stars > 0 -> ActionNeonCyan.copy(alpha = 0.3f)
-        isLocked -> Color.White.copy(alpha = 0.03f)
-        else -> Color.White.copy(alpha = 0.1f)
-    }
-
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, borderColor),
-        colors = CardDefaults.cardColors(containerColor = bgColor),
-        modifier = Modifier
-            .aspectRatio(1f)
-            .clickable(enabled = !isLocked, onClick = onClick)
-    ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            if (isLocked) {
-                Icon(Icons.Default.Lock, null, tint = SlateMutedText.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "$levelId",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    if (stars > 0) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                            repeat(3) { i ->
-                                Icon(
-                                    Icons.Default.Star,
-                                    null,
-                                    tint = if (i < stars) AccentGold else Color.White.copy(alpha = 0.1f),
-                                    modifier = Modifier.size(10.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = ActionNeonCyan)
+        SettingsDialog(
+            userStats = userStats,
+            onToggleSound = onToggleSound,
+            onToggleMusic = onToggleMusic,
+            onToggleHaptic = onToggleHaptic,
+            onSwitchTheme = onSwitchTheme,
+            onResetAllData = onResetAllData,
+            onDismiss = { showSettingsDialog = false }
         )
+    }
+}
+
+@Composable
+private fun SettingsDialog(
+    userStats: UserStats?,
+    onToggleSound: (Boolean) -> Unit,
+    onToggleMusic: (Boolean) -> Unit,
+    onToggleHaptic: (Boolean) -> Unit,
+    onSwitchTheme: (String) -> Unit,
+    onResetAllData: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            border = BorderStroke(1.5.dp, ActionNeonCyan),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text("SETTINGS", color = ActionNeonCyan, fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, letterSpacing = 2.sp)
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+                SettingToggle("SOUND EFFECTS", userStats?.soundEnabled != false, onToggleSound)
+                SettingToggle("MUSIC", userStats?.musicEnabled != false, onToggleMusic)
+                SettingToggle("HAPTIC FEEDBACK", userStats?.hapticEnabled != false, onToggleHaptic)
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+                // Privacy Policy
+                TextButton(onClick = {
+                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://your-privacy-policy-url.com")))
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Privacy Policy", color = SlateMutedText, fontSize = 12.sp)
+                }
+
+                // Reset
+                var confirmReset by remember { mutableStateOf(false) }
+                if (!confirmReset) {
+                    TextButton(onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text("RESET ALL PROGRESSION", color = ActionNeonCoral, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Text("This will permanently wipe all progress!", color = ActionNeonCoral, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { confirmReset = false }, shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
+                            Text("Cancel", color = Color.White, fontSize = 11.sp)
+                        }
+                        Button(onClick = { onResetAllData(); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = ActionNeonCoral), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
+                            Text("Yes, Reset", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = ActionNeonMint), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(44.dp)) {
+                    Text("CLOSE", color = Color.Black, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingToggle(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = ActionNeonCyan))
     }
 }
