@@ -1,0 +1,6 @@
+{
+  "name": "Equilibrium",
+  "description": "One tap. Infinite ripples. Find the balance in this addictive mathematical puzzle game.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
