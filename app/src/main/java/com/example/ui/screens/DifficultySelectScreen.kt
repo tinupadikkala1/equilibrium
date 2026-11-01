@@ -45,7 +45,7 @@ fun DifficultySelectScreen(
             Text("How do you want to play?", color = SlateMutedText, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 36.dp))
 
             // ZEN
-            ModeCard("🧘", "Zen", "No timer · Free hints · Relax", ActionNeonCyan, "difficulty_zen_card") { onSelectDifficulty(GameViewModel.Difficulty.ZEN) }
+            ModeCard("🧘", "Zen", "No timer · 10 daily hints · Relax", ActionNeonCyan, "difficulty_zen_card") { onSelectDifficulty(GameViewModel.Difficulty.ZEN) }
             Spacer(Modifier.height(16.dp))
             // MASTER
             ModeCard("⚡", "Master", "Countdown · Limited hints · Compete", ActionNeonCoral, "difficulty_master_card") { onSelectDifficulty(GameViewModel.Difficulty.MASTER) }

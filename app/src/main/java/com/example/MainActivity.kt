@@ -159,6 +159,8 @@ class MainActivity : ComponentActivity() {
                         val difficultyMode by viewModel.gameDifficulty.collectAsState()
                         val countdownSecondsLeft by viewModel.countdownSecondsLeft.collectAsState()
                         val isTimeUp by viewModel.isTimeUp.collectAsState()
+                        val zenHintsRemaining by viewModel.zenHintsRemaining.collectAsState()
+                        val zenHintAdRequired by viewModel.zenHintAdRequired.collectAsState()
 
                         val onCellTapped = remember(viewModel) { { r: Int, c: Int -> viewModel.tapCell(r, c, this@MainActivity) } }
                         val onUndo = remember(viewModel) { { viewModel.undoMove() } }
@@ -204,6 +206,9 @@ class MainActivity : ComponentActivity() {
                             onEarnReward = onEarnReward,
                             onShowRewardedAd = onShowRewardedAd,
                             onShowInterstitialAd = onShowInterstitialAd,
+                            zenHintsRemaining = zenHintsRemaining,
+                            zenHintAdRequired = zenHintAdRequired,
+                            onZenHintAdWatched = { viewModel.onZenHintAdWatched() },
                             onBack = onBack
                         )
                     }

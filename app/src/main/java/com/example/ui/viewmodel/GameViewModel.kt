@@ -193,6 +193,7 @@ class GameViewModel(
         viewModelScope.launch {
             repository.checkDailyStreak()
             repository.getOrCreateUserStats()
+            zenHintsRemaining.value = repository.getZenHintsRemaining()
             checkActiveGameSave()
             loadLevel(1)
         }
@@ -345,8 +346,17 @@ class GameViewModel(
         }
 
         if (isZen) {
-            // Zen mode: hints are always free, no limit
-            getHintAction()
+            // Zen mode: 10 free hints per day, then watch ad for more
+            viewModelScope.launch {
+                val used = repository.useZenHint()
+                if (used) {
+                    zenHintsRemaining.value = repository.getZenHintsRemaining()
+                    getHintAction()
+                } else {
+                    // Daily limit exhausted — signal UI to show rewarded ad
+                    zenHintAdRequired.value = true
+                }
+            }
         } else {
             // Master mode: consume from economy
             economyController.consumeHint(
@@ -358,18 +368,23 @@ class GameViewModel(
 
     fun onZenHintAdWatched() {
         viewModelScope.launch {
-            repository.addHints(2)
+            // Grant 3 extra zen hints by reducing the daily usage counter
+            repository.addZenHints(3)
+            zenHintsRemaining.value = repository.getZenHintsRemaining()
             zenHintAdRequired.value = false
-            // Grant 2 hints via the normal hint economy for use
-            // Trigger the hint automatically after ad
-            val currentBoard = boardState.value ?: return@launch
-            hintsUsedThisLevel.value += 1
-            val bestCell = GameSolver.getBestHintCell(currentBoard, gridSize.value)
-            if (bestCell != null) {
-                highlightedHintCell.value = bestCell
-                delay(4000)
-                if (highlightedHintCell.value == bestCell) {
-                    highlightedHintCell.value = null
+            // Auto-consume one hint immediately after ad
+            val used = repository.useZenHint()
+            if (used) {
+                zenHintsRemaining.value = repository.getZenHintsRemaining()
+                val currentBoard = boardState.value ?: return@launch
+                hintsUsedThisLevel.value += 1
+                val bestCell = GameSolver.getBestHintCell(currentBoard, gridSize.value)
+                if (bestCell != null) {
+                    highlightedHintCell.value = bestCell
+                    delay(4000)
+                    if (highlightedHintCell.value == bestCell) {
+                        highlightedHintCell.value = null
+                    }
                 }
             }
         }

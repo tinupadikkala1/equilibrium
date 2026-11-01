@@ -119,6 +119,14 @@ class GameRepository(
         return (10 - usedToday).coerceAtLeast(0)
     }
 
+    suspend fun addZenHints(amount: Int) {
+        val stats = getOrCreateUserStats()
+        val todayEpochDay = (System.currentTimeMillis() / (24 * 60 * 60 * 1000)).toInt()
+        val usedToday = if (stats.zenHintsLastResetDay == todayEpochDay) stats.zenHintsUsedToday else 0
+        val newUsed = (usedToday - amount).coerceAtLeast(0)
+        userStatsDao.insertOrUpdate(stats.copy(zenHintsUsedToday = newUsed, zenHintsLastResetDay = todayEpochDay))
+    }
+
     suspend fun addHints(amount: Int) {
         userStatsDao.addHints(amount)
     }

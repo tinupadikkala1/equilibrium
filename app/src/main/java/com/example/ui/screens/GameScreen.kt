@@ -51,6 +51,9 @@ fun GameScreen(
     onChangeDifficulty: ((GameViewModel.Difficulty) -> Unit)? = null,
     onShowRewardedAd: (String, (Int) -> Unit) -> Unit,
     onShowInterstitialAd: (() -> Unit) -> Unit,
+    zenHintsRemaining: Int = 10,
+    zenHintAdRequired: Boolean = false,
+    onZenHintAdWatched: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showPauseSettings by remember { mutableStateOf(false) }
@@ -164,7 +167,7 @@ fun GameScreen(
                     if (undoLeft > 0) onUndo() else onShowRewardedAd("undo") { onEarnReward("undo", it) }
                 }
                 PillButton(Icons.Default.Refresh, "RESET", "", ActionNeonCoral, Modifier.weight(1f), "reset_button") { onReset() }
-                PillButton(Icons.Default.Star, "HINT", if (isZen) "(∞)" else if (hintLeft > 0) "($hintLeft)" else "▶+3", AccentGold, Modifier.weight(1f), "hint_button") {
+                PillButton(Icons.Default.Star, "HINT", if (isZen) { if (zenHintsRemaining > 0) "($zenHintsRemaining)" else "▶+3" } else { if (hintLeft > 0) "($hintLeft)" else "▶+3" }, AccentGold, Modifier.weight(1f), "hint_button") {
                     if (isZen) onHint() else { if (hintLeft > 0) onHint() else onShowRewardedAd("hint") { onEarnReward("hint", it) } }
                 }
             }
@@ -176,6 +179,13 @@ fun GameScreen(
     // ─── DIALOGS ───
     var showWinDialog by remember { mutableStateOf(false) }
     LaunchedEffect(winState) { if (winState) { kotlinx.coroutines.delay(4000L); showWinDialog = true } else showWinDialog = false }
+
+    // Show rewarded ad when zen hints are exhausted
+    LaunchedEffect(zenHintAdRequired) {
+        if (zenHintAdRequired) {
+            onShowRewardedAd("hint") { _ -> onZenHintAdWatched() }
+        }
+    }
 
     if (showWinDialog) {
         WinDialog(starredScore, movesCount, par, levelId, isDailyChallenge, previousBestMoves, onNextLevel, onReset, onBack, onShowInterstitialAd, { cb -> onShowRewardedAd("hint") { _ -> cb(0) } })

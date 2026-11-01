@@ -180,13 +180,6 @@ private fun SettingsSheet(userStats: UserStats?, onSound: (Boolean) -> Unit, onM
                 Toggle("Music", userStats?.musicEnabled != false, onMusic)
                 Toggle("Haptics", userStats?.hapticEnabled != false, onHaptic)
                 HorizontalDivider(color = Color.White.copy(0.06f))
-                // Themes
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Neon Pulse" to ActionNeonCyan, "Pastel Breeze" to PastelCyan, "Minimal Mono" to MonoAccent, "Midnight" to MidnightPrimary, "Forest" to ForestPrimary, "Sunset" to SunsetPrimary).forEach { (n, c) ->
-                        Box(Modifier.size(30.dp).clip(CircleShape).background(c).border(if (userStats?.themeName == n) 2.dp else 0.dp, Color.White, CircleShape).clickable { onTheme(n) })
-                    }
-                }
-                HorizontalDivider(color = Color.White.copy(0.06f))
                 // Demo
                 OutlinedButton(onClick = { showDemo = true }, shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, ActionNeonCyan.copy(0.3f)), modifier = Modifier.fillMaxWidth()) { Text("▶  DEMO", color = ActionNeonCyan, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                 // Privacy
