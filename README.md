@@ -20,8 +20,9 @@ The original stage progression and banner/interstitial/rewarded ad integrations 
 ## Build
 
 Open this directory in Android Studio with Android SDK 36 installed. The Gradle
-wrapper uses Java 17 in the verified local environment. No Gemini API key is
-needed by the game.
+wrapper uses Java 17 in the verified local environment. Unit tests select a Java 21
+toolchain because Robolectric's API 36 sandbox requires it; install JDK 21 or allow
+Gradle toolchain provisioning. No Gemini API key is needed by the game.
 
 ```sh
 ./gradlew :app:assembleDebug
