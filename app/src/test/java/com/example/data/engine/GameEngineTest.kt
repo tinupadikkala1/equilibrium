@@ -45,11 +45,6 @@ class GameEngineTest {
         assertEquals(level1A.par, level1B.par)
         assertTrue(level1A.board.contentDeepEquals(level1B.board))
 
-        val dailyA = LevelGenerator.generateDailyLevel(20261101)
-        val dailyB = LevelGenerator.generateDailyLevel(20261101)
-        assertEquals(dailyA.size, dailyB.size)
-        assertEquals(dailyA.par, dailyB.par)
-        assertTrue(dailyA.board.contentDeepEquals(dailyB.board))
     }
 
     @Test

@@ -15,4 +15,6 @@ local.properties
 debug.keystore
 my-upload-key.jks
 graphify-out/
-/app/schemas/
+__pycache__/
+/app/schemas/*/*
+!/app/schemas/com.example.data.database.AppDatabase/8.json

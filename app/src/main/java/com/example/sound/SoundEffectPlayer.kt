@@ -21,6 +21,7 @@ object SoundEffectPlayer {
 
     fun playTap() {
         try {
+            ensureToneGenerator()
             toneGen?.startTone(ToneGenerator.TONE_PROP_BEEP, 80)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -37,9 +38,14 @@ object SoundEffectPlayer {
 
     fun playWin() {
         try {
+            ensureToneGenerator()
             toneGen?.startTone(ToneGenerator.TONE_PROP_ACK, 300)
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun ensureToneGenerator() {
+        if (toneGen == null) toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 35)
     }
 }

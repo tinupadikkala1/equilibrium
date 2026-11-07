@@ -13,8 +13,6 @@ data class ActiveGameSave(
     val boardStateString: String,
     val initialBoardSnapshotString: String,
     val secondsElapsed: Int,
-    val isDailyChallenge: Boolean,
-    val dailyDateKey: Int,
-    val gameDifficulty: String,
-    val historyStackString: String
+    val historyStackString: String,
+    val countdownSecondsLeft: Int
 )

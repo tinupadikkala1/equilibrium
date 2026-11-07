@@ -13,8 +13,7 @@ data class UserStats(
     val lastPlayDayOfYear: Int = 0,
     val soundEnabled: Boolean = true,
     val hapticEnabled: Boolean = true,
-    val themeName: String = "Neon Pulse",
+    val themeName: String = "Orbital Glass",
     val musicEnabled: Boolean = true,
-    val zenHintsUsedToday: Int = 0,
-    val zenHintsLastResetDay: Int = 0
+    val tutorialCompleted: Boolean = false
 )

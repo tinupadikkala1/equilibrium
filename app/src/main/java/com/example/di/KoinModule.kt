@@ -15,7 +15,7 @@ val appModule = module {
     single { AppDatabase.getDatabase(androidContext()) }
     single {
         val db = get<AppDatabase>()
-        GameRepository(db.levelProgressDao(), db.userStatsDao(), db.dailyChallengeDao(), db.activeGameSaveDao(), db.levelAttemptHistoryDao())
+        GameRepository(db.levelProgressDao(), db.userStatsDao(), db.activeGameSaveDao(), db.levelAttemptHistoryDao())
     }
     single<AdController> { DefaultAdController() }
     single<HapticController> { DefaultHapticController() }

@@ -31,4 +31,22 @@ interface UserStatsDao {
 
     @Query("UPDATE user_stats SET skips = skips + :amount WHERE id = 1")
     suspend fun addSkips(amount: Int)
+
+    @Query("UPDATE user_stats SET themeName = :name WHERE id = 1")
+    suspend fun updateTheme(name: String)
+
+    @Query("UPDATE user_stats SET soundEnabled = :enabled WHERE id = 1")
+    suspend fun updateSound(enabled: Boolean)
+
+    @Query("UPDATE user_stats SET musicEnabled = :enabled WHERE id = 1")
+    suspend fun updateMusic(enabled: Boolean)
+
+    @Query("UPDATE user_stats SET hapticEnabled = :enabled WHERE id = 1")
+    suspend fun updateHaptic(enabled: Boolean)
+
+    @Query("UPDATE user_stats SET tutorialCompleted = 1 WHERE id = 1")
+    suspend fun completeTutorial()
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfMissing(stats: UserStats)
 }

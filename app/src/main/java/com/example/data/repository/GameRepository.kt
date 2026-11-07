@@ -19,7 +19,7 @@ class GameRepository(
     private val levelAttemptHistoryDao: LevelAttemptHistoryDao
 ) {
     val allLevelProgress: Flow<List<LevelProgress>> = levelProgressDao.getAllLevelProgress()
-    // removed: allDailyProgress (daily challenge)
+    val userStatsFlow: Flow<UserStats?> = userStatsDao.getUserStatsFlow()
 
     suspend fun getActiveGameSave(): ActiveGameSave? = activeGameSaveDao.getActiveGameSave()
 
@@ -37,8 +37,8 @@ class GameRepository(
             return existing
         }
         val defaultStats = UserStats()
-        userStatsDao.insertOrUpdate(defaultStats)
-        return defaultStats
+        userStatsDao.insertIfMissing(defaultStats)
+        return userStatsDao.getUserStats() ?: defaultStats
     }
 
     suspend fun saveLevelProgress(levelId: Int, stars: Int, movesTaken: Int, timeTakenSeconds: Int) {
@@ -90,7 +90,7 @@ class GameRepository(
     }
 
     suspend fun addUndos(amount: Int) {
-        userStatsDao.addUndos(amount)
+        userStatsDao.addUndos(amount.coerceIn(0, 100))
     }
 
     suspend fun useHint(): Boolean {
@@ -98,7 +98,7 @@ class GameRepository(
     }
 
     suspend fun addHints(amount: Int) {
-        userStatsDao.addHints(amount)
+        userStatsDao.addHints(amount.coerceIn(0, 100))
     }
 
     suspend fun useSkip(): Boolean {
@@ -106,27 +106,27 @@ class GameRepository(
     }
 
     suspend fun addSkips(amount: Int) {
-        userStatsDao.addSkips(amount)
+        userStatsDao.addSkips(amount.coerceIn(0, 100))
     }
 
     suspend fun updateTheme(themeName: String) {
-        val stats = getOrCreateUserStats()
-        userStatsDao.insertOrUpdate(stats.copy(themeName = themeName))
+        getOrCreateUserStats()
+        userStatsDao.updateTheme(themeName)
     }
 
     suspend fun toggleSound(enabled: Boolean) {
-        val stats = getOrCreateUserStats()
-        userStatsDao.insertOrUpdate(stats.copy(soundEnabled = enabled))
+        getOrCreateUserStats()
+        userStatsDao.updateSound(enabled)
     }
 
     suspend fun toggleMusic(enabled: Boolean) {
-        val stats = getOrCreateUserStats()
-        userStatsDao.insertOrUpdate(stats.copy(musicEnabled = enabled))
+        getOrCreateUserStats()
+        userStatsDao.updateMusic(enabled)
     }
 
     suspend fun toggleHaptic(enabled: Boolean) {
-        val stats = getOrCreateUserStats()
-        userStatsDao.insertOrUpdate(stats.copy(hapticEnabled = enabled))
+        getOrCreateUserStats()
+        userStatsDao.updateHaptic(enabled)
     }
 
     suspend fun checkDailyStreak() {
@@ -158,25 +158,12 @@ class GameRepository(
         )
     }
 
-    suspend fun saveDailyProgress(dateKey: Int, completed: Boolean, movesTaken: Int, timeTakenSeconds: Int, stars: Int) {
-        // Daily challenge removed - record as regular level attempt
-        levelAttemptHistoryDao.insertAttempt(
-            LevelAttemptHistory(
-                levelId = dateKey,
-                isDaily = false,
-                movesTaken = movesTaken,
-                timeTakenSeconds = timeTakenSeconds,
-                stars = stars
-            )
-        )
-    }
-
     suspend fun clearAllProgressAndResetStats() {
         levelProgressDao.deleteAll()
         activeGameSaveDao.deleteActiveGameSave()
         val defaultStats = UserStats(
             id = 1,
-            themeName = "Neon Pulse",
+            themeName = "Orbital Glass",
             hints = 5,
             undos = 5,
             skips = 1,
@@ -193,6 +180,8 @@ class GameRepository(
     fun getHistoryForLevel(levelId: Int, isDaily: Boolean): Flow<List<LevelAttemptHistory>> {
         return levelAttemptHistoryDao.getHistoryForLevel(levelId, isDaily)
     }
+
+    suspend fun completeTutorial() = userStatsDao.completeTutorial()
 
     fun getAllHistory(): Flow<List<LevelAttemptHistory>> {
         return levelAttemptHistoryDao.getAllHistory()

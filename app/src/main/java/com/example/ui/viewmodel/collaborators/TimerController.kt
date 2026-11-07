@@ -1,109 +1,43 @@
 package com.example.ui.viewmodel.collaborators
 
-import com.example.ui.viewmodel.GameViewModel.Difficulty
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
+/** A single countdown. Pausing, ads and backgrounding all suspend the same clock. */
 class TimerController(private val scope: CoroutineScope) {
     val secondsElapsed = MutableStateFlow(0)
-    val countdownSecondsLeft = MutableStateFlow<Int?>(null)
+    val countdownSecondsLeft = MutableStateFlow(0)
     val isTimeUp = MutableStateFlow(false)
+    private var job: Job? = null
 
-    private var timerJob: Job? = null
+    fun reset(par: Int) = restore(0, maxOf(45, par * 20))
 
-    fun startTimer(difficulty: Difficulty, par: Int, winStateFlow: MutableStateFlow<Boolean>, onTimeUp: () -> Unit) {
-        timerJob?.cancel()
-        secondsElapsed.value = 0
-        isTimeUp.value = false
+    fun restore(elapsed: Int, remaining: Int) {
+        pause()
+        secondsElapsed.value = elapsed.coerceAtLeast(0)
+        countdownSecondsLeft.value = remaining.coerceAtLeast(0)
+        isTimeUp.value = countdownSecondsLeft.value == 0
+    }
 
-        if (difficulty == Difficulty.MASTER) {
-            val baseTime = maxOf(45, par * 20)
-            countdownSecondsLeft.value = baseTime
-        } else {
-            countdownSecondsLeft.value = null
-        }
-
-        timerJob = scope.launch {
-            while (true) {
+    fun resume() {
+        if (job?.isActive == true || isTimeUp.value) return
+        job = scope.launch {
+            while (countdownSecondsLeft.value > 0) {
                 delay(1000)
-                if (!winStateFlow.value && !isTimeUp.value) {
-                    secondsElapsed.value += 1
-                    if (difficulty == Difficulty.MASTER) {
-                        val left = countdownSecondsLeft.value ?: 0
-                        if (left > 1) {
-                            countdownSecondsLeft.value = left - 1
-                        } else {
-                            countdownSecondsLeft.value = 0
-                            isTimeUp.value = true
-                            onTimeUp()
-                            break
-                        }
-                    }
-                }
+                secondsElapsed.value += 1
+                countdownSecondsLeft.value -= 1
+                if (countdownSecondsLeft.value == 0) isTimeUp.value = true
             }
         }
     }
 
-    fun stopTimer() {
-        timerJob?.cancel()
-    }
+    fun pause() { job?.cancel(); job = null }
 
     fun addSeconds(seconds: Int) {
-        val current = countdownSecondsLeft.value ?: return
-        countdownSecondsLeft.value = current + seconds
-        if (isTimeUp.value) {
-            isTimeUp.value = false
-            // Restart timer loop
-            timerJob = scope.launch {
-                while (true) {
-                    delay(1000)
-                    secondsElapsed.value += 1
-                    val left = countdownSecondsLeft.value ?: 0
-                    if (left > 1) {
-                        countdownSecondsLeft.value = left - 1
-                    } else {
-                        countdownSecondsLeft.value = 0
-                        isTimeUp.value = true
-                        break
-                    }
-                }
-            }
-        }
-    }
-
-    fun resumeTimer(difficulty: Difficulty, par: Int, secondsElapsedValue: Int, winStateFlow: MutableStateFlow<Boolean>, onTimeUp: () -> Unit) {
-        timerJob?.cancel()
-        secondsElapsed.value = secondsElapsedValue
-        isTimeUp.value = false
-
-        if (difficulty == Difficulty.MASTER) {
-            val baseTime = maxOf(45, par * 20)
-            countdownSecondsLeft.value = maxOf(0, baseTime - secondsElapsedValue)
-        } else {
-            countdownSecondsLeft.value = null
-        }
-
-        timerJob = scope.launch {
-            while (true) {
-                delay(1000)
-                if (!winStateFlow.value && !isTimeUp.value) {
-                    secondsElapsed.value += 1
-                    if (difficulty == Difficulty.MASTER) {
-                        val left = countdownSecondsLeft.value ?: 0
-                        if (left > 1) {
-                            countdownSecondsLeft.value = left - 1
-                        } else {
-                            countdownSecondsLeft.value = 0
-                            isTimeUp.value = true
-                            onTimeUp()
-                            break
-                        }
-                    }
-                }
-            }
-        }
+        countdownSecondsLeft.value += seconds.coerceIn(0, 300)
+        isTimeUp.value = countdownSecondsLeft.value == 0
     }
 }

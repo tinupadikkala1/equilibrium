@@ -1,13 +1,11 @@
 package com.example.ui.components
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -15,98 +13,63 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.draw.*
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.example.ui.theme.LocalGamePalette
 
-@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AnimatedTile(
-    value: Int,
-    progress: Float,
-    isHintHighlighted: Boolean,
-    onTap: () -> Unit,
-    modifier: Modifier = Modifier
+    value: Int, progress: Float, isHintHighlighted: Boolean, onTap: () -> Unit,
+    modifier: Modifier = Modifier, enabled: Boolean = true, label: String = "Tile, value $value",
 ) {
-    val scope = rememberCoroutineScope()
-    var clickedScale by remember { mutableStateOf(1.0f) }
-    val animatedScale by animateFloatAsState(
-        targetValue = clickedScale,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "TileScale"
-    )
-
-    var pulseScale by remember { mutableStateOf(1.0f) }
-    LaunchedEffect(isHintHighlighted) {
-        if (isHintHighlighted) {
-            while (true) { pulseScale = 1.06f; delay(450); pulseScale = 0.94f; delay(450) }
-        } else { pulseScale = 1.0f }
-    }
-
-    val baseColor = lerp(
-        MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
-        MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f),
-        progress
-    )
-    val gradientBrush = Brush.radialGradient(
-        colors = listOf(baseColor.copy(alpha = 0.95f), baseColor.copy(alpha = 0.6f))
-    )
-    val borderColor = if (isHintHighlighted) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
-    val shape = RoundedCornerShape(14.dp)
-    val finalScale = (if (isHintHighlighted) pulseScale else 1f) * animatedScale
-
+    val p = LocalGamePalette.current
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    val compression by animateFloatAsState(if (pressed) .94f else 1f, spring(stiffness = 800f), label = "tile press")
+    val special = value % 2 == 0 && progress < 1f
+    val base = when { isHintHighlighted -> p.gold; progress >= 1f -> p.accent; special -> p.violet; else -> p.panelRaised }
+    val fill by animateColorAsState(base, label = "tile energy")
+    val ink = when { isHintHighlighted -> p.onGold; progress >= 1f -> p.onAccent; special -> p.onViolet; else -> p.ink }
+    val shape = RoundedCornerShape(if (p.dark) 17.dp else 15.dp)
     Box(
+        modifier.aspectRatio(1f).padding(bottom = 4.dp)
+            .graphicsLayer { scaleX = compression; scaleY = compression }
+            .drawBehind { if (!p.dark) drawRoundRect(p.shadow, topLeft = Offset(0f, 4.dp.toPx()), cornerRadius = CornerRadius(15.dp.toPx())) }
+            .shadow(if (p.dark) 7.dp else 0.dp, shape)
+            .clip(shape).background(Brush.linearGradient(listOf(fill, lerp(fill, p.background, .12f))))
+            .border(if (isHintHighlighted) 3.dp else if (p.dark) 1.dp else 2.dp, if (isHintHighlighted) p.ink else p.line, shape)
+            .semantics { contentDescription = if (isHintHighlighted) "$label, suggested move" else label }
+            .clickable(enabled = enabled, role = Role.Button, interactionSource = interactions, indication = null, onClick = onTap),
         contentAlignment = Alignment.Center,
-        modifier = modifier
-            .padding(3.dp)
-            .aspectRatio(1f)
-            .shadow(
-                elevation = if (isHintHighlighted) 14.dp else 3.dp,
-                shape = shape,
-                ambientColor = if (isHintHighlighted) MaterialTheme.colorScheme.primary else Color.Transparent,
-                spotColor = if (isHintHighlighted) MaterialTheme.colorScheme.primary else Color.Transparent
-            )
-            .graphicsLayer { scaleX = finalScale; scaleY = finalScale }
-            .clip(shape)
-            .background(gradientBrush)
-            .border(if (isHintHighlighted) 2.dp else 1.dp, borderColor, shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                scope.launch { clickedScale = 0.82f; delay(80); clickedScale = 1.0f }
-                onTap()
-            }
-            .testTag("game_tile_$value")
     ) {
-        AnimatedContent(
-            targetState = value,
-            transitionSpec = {
-                (if (targetState > initialState)
-                    slideInVertically { it } + fadeIn() togetherWith slideOutVertically { -it } + fadeOut()
-                else
-                    slideInVertically { -it } + fadeIn() togetherWith slideOutVertically { it } + fadeOut()
-                ).using(SizeTransform(clip = false))
-            },
-            label = "TileNum"
-        ) { num ->
-            Text(
-                text = num.toString(),
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
-            )
+        Text("$value", color = ink, fontWeight = FontWeight.ExtraBold, fontSize = if (value in -99..99) 23.sp else 17.sp)
+    }
+}
+
+@Composable
+fun PuzzleBoard(board: Array<IntArray>, hint: Pair<Int, Int>?, enabled: Boolean, onTap: (Int, Int) -> Unit, modifier: Modifier = Modifier) {
+    val p = LocalGamePalette.current
+    val size = board.size
+    val progress = com.example.data.engine.GameRules.calculateProgress(board)
+    Column(modifier.background(p.panel.copy(alpha = .7f), RoundedCornerShape(26.dp))
+        .border(if (p.dark) 1.dp else 2.dp, p.line, RoundedCornerShape(26.dp)).padding(if (size >= 5) 8.dp else 12.dp),
+        verticalArrangement = Arrangement.spacedBy(if (size >= 5) 5.dp else 8.dp)) {
+        for (r in board.indices) {
+            Row(horizontalArrangement = Arrangement.spacedBy(if (size >= 5) 5.dp else 8.dp)) {
+                for (c in board[r].indices) {
+                    AnimatedTile(board[r][c], progress, hint == Pair(r, c), { onTap(r, c) },
+                        Modifier.weight(1f).testTag("tile_${r}_$c"), enabled, "Row ${r + 1}, column ${c + 1}, value ${board[r][c]}")
+                }
+            }
         }
     }
 }

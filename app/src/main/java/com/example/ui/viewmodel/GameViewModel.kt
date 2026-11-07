@@ -1,504 +1,308 @@
 package com.example.ui.viewmodel
 
-import android.app.Activity
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.data.database.ActiveGameSave
+import com.example.data.engine.GameRules
+import com.example.data.engine.GameSolver
+import com.example.data.engine.LevelGenerator
+import com.example.data.repository.GameRepository
 import com.example.platform.AdController
 import com.example.platform.HapticController
-import com.example.data.database.ActiveGameSave
-import com.example.data.database.LevelProgress
-import com.example.data.database.UserStats
-import com.example.data.database.DailyChallengeProgress
-import com.example.data.database.LevelAttemptHistory
-import com.example.data.engine.LevelGenerator
-import com.example.data.engine.GameSolver
-import com.example.data.engine.GameRules
-import com.example.data.repository.GameRepository
 import com.example.sound.SoundEffectPlayer
+import com.example.ui.theme.VisualTheme
 import com.example.ui.viewmodel.collaborators.GameEngineState
-import com.example.ui.viewmodel.collaborators.TimerController
 import com.example.ui.viewmodel.collaborators.SaveManager
-import com.example.ui.viewmodel.collaborators.EconomyController
+import com.example.ui.viewmodel.collaborators.TimerController
 import com.example.ui.viewmodel.collaborators.deepCopy
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class GameViewModel(
     private val repository: GameRepository,
-    private val adController: AdController,
+    @Suppress("unused") private val adController: AdController,
     private val hapticController: HapticController
 ) : ViewModel() {
-
-    enum class Difficulty { ZEN, MASTER }
-
-    // Collaborators
-    private val engineState = GameEngineState()
-    private val timerController = TimerController(viewModelScope)
-    private val economyController = EconomyController(repository, viewModelScope)
-
-    // Gameplay States delegated to collaborators
-    val levelId get() = engineState.levelId
-    val gridSize get() = engineState.gridSize
-    val par get() = engineState.par
-    val movesCount get() = engineState.movesCount
-    val boardState get() = engineState.boardState
-    val winState get() = engineState.winState
-    val starredScore get() = engineState.starredScore
-    val highlightedHintCell get() = engineState.highlightedHintCell
-    val hintsUsedThisLevel get() = engineState.hintsUsedThisLevel
-
-    val secondsElapsed get() = timerController.secondsElapsed
-    val countdownSecondsLeft get() = timerController.countdownSecondsLeft
-    val isTimeUp get() = timerController.isTimeUp
-
-    // General states kept in ViewModel
-    val gameDifficulty = MutableStateFlow(Difficulty.ZEN)
-    val showToastMessage = MutableStateFlow<String?>(null)
-    val isDailyChallenge = MutableStateFlow(false)
-    val dailyDateKey = MutableStateFlow(0)
-    val activeGameSave = MutableStateFlow<ActiveGameSave?>(null)
-
-    fun clearToastMessage() {
-        showToastMessage.value = null
-    }
-
-    private fun startTimer() {
-        timerController.startTimer(
-            difficulty = gameDifficulty.value,
-            par = par.value,
-            winStateFlow = winState,
-            onTimeUp = { /* Time-up callback if needed */ }
-        )
-    }
-
-    fun startGameWithDifficulty(difficulty: Difficulty) {
-        gameDifficulty.value = difficulty
-        startTimer()
-        writeActiveGameSave(immediate = true)
-    }
-
-    // Room Persistent UI States
-    val userStats: StateFlow<UserStats?> = repository.userStatsFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
-
-    val allProgress: StateFlow<List<LevelProgress>> = repository.allLevelProgress
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-
-    val allDailyProgress: StateFlow<List<DailyChallengeProgress>> = repository.allDailyProgress
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-
-    fun checkActiveGameSave() {
-        viewModelScope.launch {
-            activeGameSave.value = repository.getActiveGameSave()
-        }
-    }
-
+    private val engine = GameEngineState()
+    private val timer = TimerController(viewModelScope)
+    private val persistenceMutex = Mutex()
     private var saveJob: Job? = null
+    private var hintJob: Job? = null
+    private var session = 0
+    private var foreground = false
+    private var onGameScreen = false
+    private var overlayOpen = false
+    private var ready = false
 
-    fun writeActiveGameSave(immediate: Boolean = false) {
-        val currentBoard = boardState.value ?: return
-        val currentInitialSnapshot = engineState.initialBoardSnapshot ?: return
-        saveJob?.cancel()
-        saveJob = viewModelScope.launch {
-            if (!immediate) delay(1500L)
-            val save = ActiveGameSave(
-                levelId = levelId.value,
-                gridSize = gridSize.value,
-                par = par.value,
-                movesCount = movesCount.value,
-                boardStateString = SaveManager.serializeBoard(currentBoard),
-                initialBoardSnapshotString = SaveManager.serializeBoard(currentInitialSnapshot),
-                secondsElapsed = secondsElapsed.value,
-                isDailyChallenge = isDailyChallenge.value,
-                dailyDateKey = dailyDateKey.value,
-                gameDifficulty = gameDifficulty.value.name,
-                historyStackString = SaveManager.serializeHistory(engineState.historyStack)
-            )
-            repository.saveActiveGame(save)
-            activeGameSave.value = save
-        }
-    }
-
-    fun deleteActiveGameSave() {
-        saveJob?.cancel()
-        viewModelScope.launch {
-            repository.deleteActiveGameSave()
-            activeGameSave.value = null
-        }
-    }
-
-    fun resumeActiveGame() {
-        viewModelScope.launch {
-            val save = repository.getActiveGameSave() ?: return@launch
-            isDailyChallenge.value = save.isDailyChallenge
-            dailyDateKey.value = save.dailyDateKey
-            levelId.value = save.levelId
-            gridSize.value = save.gridSize
-            par.value = save.par
-            movesCount.value = save.movesCount
-            winState.value = false
-            starredScore.value = 0
-            highlightedHintCell.value = null
-            
-            val bState = SaveManager.deserializeBoard(save.boardStateString)
-            val initSnap = SaveManager.deserializeBoard(save.initialBoardSnapshotString)
-            val parsedHistory = SaveManager.deserializeHistory(save.historyStackString)
-
-            if (bState == null || initSnap == null || parsedHistory == null) {
-                repository.deleteActiveGameSave()
-                activeGameSave.value = null
-                showToastMessage.value = "We couldn't resume your last session; starting fresh."
-                loadLevel(1, startWithCurrentDifficulty = false)
-                return@launch
-            }
-
-            boardState.value = bState
-            engineState.initialBoardSnapshot = initSnap
-            engineState.historyStack.clear()
-            parsedHistory.forEach { engineState.historyStack.push(it) }
-            
-            // Restart timer with correct elapsed seconds
-            timerController.resumeTimer(
-                difficulty = if (save.gameDifficulty == "MASTER") Difficulty.MASTER else Difficulty.ZEN,
-                par = par.value,
-                secondsElapsedValue = save.secondsElapsed,
-                winStateFlow = winState,
-                onTimeUp = { /* Time-up callback if needed */ }
-            )
-            gameDifficulty.value = if (save.gameDifficulty == "MASTER") Difficulty.MASTER else Difficulty.ZEN
-        }
-    }
+    val levelId get() = engine.levelId
+    val gridSize get() = engine.gridSize
+    val par get() = engine.par
+    val movesCount get() = engine.movesCount
+    val boardState get() = engine.boardState
+    val winState get() = engine.winState
+    val starredScore get() = engine.starredScore
+    val highlightedHintCell get() = engine.highlightedHintCell
+    val secondsElapsed get() = timer.secondsElapsed
+    val countdownSecondsLeft get() = timer.countdownSecondsLeft
+    val isTimeUp get() = timer.isTimeUp
+    val showToastMessage = MutableStateFlow<String?>(null)
+    val activeGameSave = MutableStateFlow<ActiveGameSave?>(null)
+    val loaded = MutableStateFlow(false)
+    val busy = MutableStateFlow(false)
+    val canUndo = MutableStateFlow(false)
+    val bestTimeSeconds = MutableStateFlow(0)
+    val previousBestMoves = MutableStateFlow(0)
+    val userStats = repository.userStatsFlow.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val allProgress = repository.allLevelProgress.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val allHistory = repository.getAllHistory().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
         viewModelScope.launch {
-            repository.checkDailyStreak()
             repository.getOrCreateUserStats()
-            zenHintsRemaining.value = repository.getZenHintsRemaining()
-            checkActiveGameSave()
-            loadLevel(1)
+            repository.checkDailyStreak()
+            activeGameSave.value = repository.getActiveGameSave()
+            loaded.value = true
         }
     }
 
-    fun loadLevel(id: Int, startWithCurrentDifficulty: Boolean = false) {
-        viewModelScope.launch {
-            isDailyChallenge.value = false
-            levelId.value = id
-            val generated = LevelGenerator.generateLevel(id)
-            gridSize.value = generated.size
-            par.value = generated.par
-            engineState.reset()
+    fun clearToastMessage() { showToastMessage.value = null }
+    fun notify(message: String) { showToastMessage.value = message }
 
-            // Save deep copy of the board state
-            val boardCopy = generated.board.deepCopy()
-            boardState.value = boardCopy
-            engineState.initialBoardSnapshot = generated.board.deepCopy()
+    private fun updateClock() {
+        if (foreground && onGameScreen && ready && !overlayOpen && !winState.value && !isTimeUp.value) timer.resume()
+        else timer.pause()
+    }
 
-            deleteActiveGameSave()
+    fun setForeground(value: Boolean) {
+        foreground = value
+        updateClock()
+        if (!value) saveNow()
+    }
 
-            if (startWithCurrentDifficulty) {
-                startTimer()
-            }
+    fun setGameVisible(value: Boolean) {
+        onGameScreen = value
+        updateClock()
+        if (!value) saveNow()
+    }
+
+    fun setOverlayOpen(value: Boolean) { overlayOpen = value; updateClock() }
+
+    fun loadLevel(id: Int) {
+        session += 1
+        hintJob?.cancel()
+        timer.pause()
+        val level = LevelGenerator.generateLevel(id.coerceAtLeast(1))
+        engine.reset()
+        levelId.value = level.levelId
+        gridSize.value = level.size
+        par.value = level.par
+        boardState.value = level.board.deepCopy()
+        engine.initialBoardSnapshot = level.board.deepCopy()
+        val best = allProgress.value.find { it.levelId == id }
+        previousBestMoves.value = best?.bestMoves ?: 0
+        bestTimeSeconds.value = best?.bestTimeSeconds ?: 0
+        canUndo.value = false
+        timer.reset(level.par)
+        ready = true
+        saveNow()
+        updateClock()
+    }
+
+    fun loadNextLevel() = loadLevel(levelId.value + 1)
+
+    fun resumeActiveGame() {
+        val save = activeGameSave.value ?: return
+        val board = SaveManager.deserializeBoard(save.boardStateString)
+        val initial = SaveManager.deserializeBoard(save.initialBoardSnapshotString)
+        val history = SaveManager.deserializeHistory(save.historyStackString)
+        if (board == null || initial == null || history == null ||
+            board.size != save.gridSize || initial.size != save.gridSize ||
+            history.any { it.size != save.gridSize } || save.levelId < 1 || save.par < 1 ||
+            save.movesCount < 0 || GameRules.checkWinCondition(board)) {
+            notify("Your saved puzzle could not be restored. A fresh stage is ready.")
+            loadLevel(save.levelId.coerceAtLeast(1))
+            return
+        }
+        session += 1
+        engine.reset()
+        levelId.value = save.levelId
+        gridSize.value = save.gridSize
+        par.value = save.par
+        movesCount.value = save.movesCount
+        boardState.value = board
+        engine.initialBoardSnapshot = initial
+        engine.historyStack.addAll(history)
+        canUndo.value = history.isNotEmpty()
+        timer.restore(save.secondsElapsed, save.countdownSecondsLeft)
+        val best = allProgress.value.find { it.levelId == save.levelId }
+        previousBestMoves.value = best?.bestMoves ?: 0
+        bestTimeSeconds.value = best?.bestTimeSeconds ?: 0
+        ready = true
+        updateClock()
+    }
+
+    private fun snapshot(): ActiveGameSave? {
+        if (!ready || winState.value) return null
+        return ActiveGameSave(
+            levelId = levelId.value, gridSize = gridSize.value, par = par.value,
+            movesCount = movesCount.value,
+            boardStateString = SaveManager.serializeBoard(boardState.value ?: return null),
+            initialBoardSnapshotString = SaveManager.serializeBoard(engine.initialBoardSnapshot ?: return null),
+            secondsElapsed = secondsElapsed.value,
+            historyStackString = SaveManager.serializeHistory(engine.historyStack),
+            countdownSecondsLeft = countdownSecondsLeft.value,
+        )
+    }
+
+    private fun scheduleSave(immediate: Boolean) {
+        val save = snapshot() ?: return
+        activeGameSave.value = save
+        saveJob?.cancel()
+        saveJob = viewModelScope.launch {
+            if (!immediate) delay(500)
+            persistenceMutex.withLock { repository.saveActiveGame(save) }
         }
     }
 
-    fun loadNextLevel(startWithCurrentDifficulty: Boolean = true) {
-        loadLevel(levelId.value + 1, startWithCurrentDifficulty)
-    }
-
-    fun loadDailyChallenge(dateKey: Int, startWithCurrentDifficulty: Boolean = false) {
-        viewModelScope.launch {
-            isDailyChallenge.value = true
-            dailyDateKey.value = dateKey
-            levelId.value = dateKey // level ID is represented by dateKey for daily
-            val generated = LevelGenerator.generateDailyLevel(dateKey)
-            gridSize.value = generated.size
-            par.value = generated.par
-            engineState.reset()
-
-            // Save deep copy of the board state
-            val boardCopy = generated.board.deepCopy()
-            boardState.value = boardCopy
-            engineState.initialBoardSnapshot = generated.board.deepCopy()
-
-            deleteActiveGameSave()
-
-            if (startWithCurrentDifficulty) {
-                startTimer()
-            }
-        }
-    }
+    fun saveNow() = scheduleSave(true)
 
     fun tapCell(r: Int, c: Int, context: Context) {
-        val currentBoard = boardState.value ?: return
-        if (winState.value) return
-
-        // Push current copy to history stack
-        engineState.historyStack.push(currentBoard.deepCopy())
-
-        // Apply visual and auditory feedback
-        playInteractionEffects(context)
-
-        // Game play transformation formulas
-        GameRules.applyTap(currentBoard, r, c)
-
-        boardState.value = currentBoard.deepCopy() // emit update
+        if (!ready || winState.value || isTimeUp.value || overlayOpen || busy.value) return
+        val previous = boardState.value ?: return
+        if (r !in previous.indices || c !in previous.indices) return
+        engine.historyStack.push(previous.deepCopy())
+        // Bound the undo archive, not the player's move count.
+        if (engine.historyStack.size > 500) engine.historyStack.removeAt(0)
+        val board = previous.deepCopy()
+        GameRules.applyTap(board, r, c)
+        boardState.value = board
         movesCount.value += 1
-
-        // Clear active hints if user tapped somewhere
+        canUndo.value = true
         highlightedHintCell.value = null
-
-        writeActiveGameSave()
-
-        checkWinCondition()
+        if (userStats.value?.soundEnabled == true) SoundEffectPlayer.playTap()
+        if (userStats.value?.hapticEnabled == true) hapticController.vibrate(context, 25)
+        if (GameRules.checkWinCondition(board)) completeLevel() else scheduleSave(false)
     }
 
-    private fun checkWinCondition() {
-        val currentBoard = boardState.value ?: return
-        val won = GameRules.checkWinCondition(currentBoard)
-
-        if (won) {
-            winState.value = true
-            timerController.stopTimer()
-            val finalMoves = movesCount.value
-            val parScore = par.value
-            val starsEarned = GameRules.calculateStars(finalMoves, parScore)
-            starredScore.value = starsEarned
-
-            // Play celebratory win effects
-            if (isSoundEnabled()) SoundEffectPlayer.playWin()
-
-            deleteActiveGameSave()
-
-            // Persist progression details to Room
-            val timeTaken = secondsElapsed.value
-            viewModelScope.launch {
-                if (isDailyChallenge.value) {
-                    repository.saveDailyProgress(dailyDateKey.value, true, finalMoves, timeTaken, starsEarned)
-                } else {
-                    repository.saveLevelProgress(levelId.value, starsEarned, finalMoves, timeTaken)
-                }
+    private fun completeLevel() {
+        winState.value = true
+        timer.pause()
+        starredScore.value = GameRules.calculateStars(movesCount.value, par.value)
+        if (userStats.value?.soundEnabled == true) SoundEffectPlayer.playWin()
+        saveJob?.cancel()
+        activeGameSave.value = null
+        val id = levelId.value
+        val stars = starredScore.value
+        val moves = movesCount.value
+        val elapsed = secondsElapsed.value
+        viewModelScope.launch {
+            persistenceMutex.withLock {
+                repository.deleteActiveGameSave()
+                repository.saveLevelProgress(id, stars, moves, elapsed)
             }
         }
     }
 
     fun undoMove() {
-        if (engineState.historyStack.isEmpty()) return
-        
-        economyController.consumeUndo(
-            onSuccess = {
-                val previousBoard = engineState.historyStack.pop()
-                boardState.value = previousBoard.deepCopy()
-                movesCount.value = maxOf(0, movesCount.value - 1)
-                highlightedHintCell.value = null
-                writeActiveGameSave()
-            },
-            onFailure = { /* Handle error / show message */ }
-        )
+        if (busy.value || winState.value || isTimeUp.value || engine.historyStack.isEmpty()) return
+        busy.value = true
+        val token = session
+        viewModelScope.launch {
+            try {
+                if (repository.useUndo() && token == session && engine.historyStack.isNotEmpty()) {
+                    boardState.value = engine.historyStack.pop().deepCopy()
+                    movesCount.value = (movesCount.value - 1).coerceAtLeast(0)
+                    highlightedHintCell.value = null
+                    canUndo.value = engine.historyStack.isNotEmpty()
+                    saveNow()
+                }
+            } finally { busy.value = false }
+        }
     }
 
     fun resetLevel() {
-        val snapshot = engineState.initialBoardSnapshot ?: return
-        boardState.value = snapshot.deepCopy()
-        engineState.reset()
-        writeActiveGameSave()
+        val initial = engine.initialBoardSnapshot ?: return
+        session += 1
+        hintJob?.cancel()
+        engine.reset()
+        boardState.value = initial.deepCopy()
+        canUndo.value = false
+        timer.reset(par.value)
+        saveNow()
+        updateClock()
     }
-
-    // Zen hint state
-    val zenHintsRemaining = MutableStateFlow(10)
-    val zenHintAdRequired = MutableStateFlow(false)
 
     fun triggerHint() {
-        val currentBoard = boardState.value ?: return
-        val isZen = gameDifficulty.value == Difficulty.ZEN
-
-        val getHintAction = {
-            hintsUsedThisLevel.value += 1
-            val bestCell = GameSolver.getBestHintCell(currentBoard, gridSize.value)
-            if (bestCell != null) {
-                highlightedHintCell.value = bestCell
-                viewModelScope.launch {
-                    delay(4000)
-                    if (highlightedHintCell.value == bestCell) {
-                        highlightedHintCell.value = null
-                    }
-                }
-            }
-        }
-
-        if (isZen) {
-            // Zen mode: 10 free hints per day, then watch ad for more
-            viewModelScope.launch {
-                val used = repository.useZenHint()
-                if (used) {
-                    zenHintsRemaining.value = repository.getZenHintsRemaining()
-                    getHintAction()
-                } else {
-                    // Daily limit exhausted — signal UI to show rewarded ad
-                    zenHintAdRequired.value = true
-                }
-            }
-        } else {
-            // Master mode: consume from economy
-            economyController.consumeHint(
-                onSuccess = getHintAction,
-                onFailure = { /* No hints left — UI handles showing ad */ }
-            )
-        }
-    }
-
-    fun onZenHintAdWatched() {
+        if (busy.value || winState.value || isTimeUp.value) return
+        val board = boardState.value?.deepCopy() ?: return
+        val token = session
+        busy.value = true
         viewModelScope.launch {
-            // Grant 3 extra zen hints by reducing the daily usage counter
-            repository.addZenHints(3)
-            zenHintsRemaining.value = repository.getZenHintsRemaining()
-            zenHintAdRequired.value = false
-            // Auto-consume one hint immediately after ad
-            val used = repository.useZenHint()
-            if (used) {
-                zenHintsRemaining.value = repository.getZenHintsRemaining()
-                val currentBoard = boardState.value ?: return@launch
-                hintsUsedThisLevel.value += 1
-                val bestCell = GameSolver.getBestHintCell(currentBoard, gridSize.value)
-                if (bestCell != null) {
-                    highlightedHintCell.value = bestCell
-                    delay(4000)
-                    if (highlightedHintCell.value == bestCell) {
-                        highlightedHintCell.value = null
-                    }
+            try {
+                val hint = withContext(Dispatchers.Default) { GameSolver.getBestHintCell(board, board.size) }
+                if (token == session && hint != null && repository.useHint()) {
+                    highlightedHintCell.value = hint
+                    hintJob?.cancel()
+                    hintJob = viewModelScope.launch { delay(4000); highlightedHintCell.value = null }
                 }
-            }
+            } finally { busy.value = false }
         }
     }
 
     fun earnReward(type: String, amount: Int) {
         if (type == "time") {
-            timerController.addSeconds(amount)
-            return
+            timer.addSeconds(30)
+            saveNow()
+            updateClock()
+        } else {
+            viewModelScope.launch {
+                when (type) {
+                    "hint" -> repository.addHints(amount)
+                    "undo" -> repository.addUndos(amount)
+                    "skip" -> repository.addSkips(amount)
+                }
+            }
         }
-        economyController.grantReward(type, amount)
     }
 
     fun skipLevel() {
-        economyController.consumeSkip(
-            onSuccess = {
-                viewModelScope.launch {
-                    repository.saveLevelProgress(levelId.value, 1, par.value, 0)
-                    delay(200)
-                    loadLevel(levelId.value + 1)
+        if (busy.value) return
+        busy.value = true
+        val token = session
+        viewModelScope.launch {
+            try {
+                if (repository.useSkip() && token == session) {
+                    persistenceMutex.withLock { repository.saveLevelProgress(levelId.value, 1, par.value, 0) }
+                    loadNextLevel()
                 }
-            },
-            onFailure = { /* Handle failure */ }
-        )
-    }
-
-    fun switchTheme(themeName: String) {
-        viewModelScope.launch {
-            repository.updateTheme(themeName)
+            } finally { busy.value = false }
         }
     }
 
-    fun toggleSoundValue(enabled: Boolean) {
-        viewModelScope.launch {
-            repository.toggleSound(enabled)
-        }
-    }
-
-    fun toggleMusicValue(enabled: Boolean) {
-        viewModelScope.launch {
-            repository.toggleMusic(enabled)
-        }
-    }
-
-    fun toggleHapticValue(enabled: Boolean) {
-        viewModelScope.launch {
-            repository.toggleHaptic(enabled)
-        }
-    }
+    fun switchTheme(name: String) { viewModelScope.launch { repository.updateTheme(VisualTheme.fromName(name).displayName) } }
+    fun toggleSoundValue(value: Boolean) { viewModelScope.launch { repository.toggleSound(value) } }
+    fun toggleMusicValue(value: Boolean) { viewModelScope.launch { repository.toggleMusic(value) } }
+    fun toggleHapticValue(value: Boolean) { viewModelScope.launch { repository.toggleHaptic(value) } }
+    fun completeTutorial() { viewModelScope.launch { repository.completeTutorial() } }
 
     fun resetAllGameData() {
+        saveJob?.cancel()
+        hintJob?.cancel()
+        timer.pause()
+        ready = false
+        session += 1
+        boardState.value = null
+        activeGameSave.value = null
         viewModelScope.launch {
-            repository.clearAllProgressAndResetStats()
-            loadLevel(1)
+            persistenceMutex.withLock { repository.clearAllProgressAndResetStats() }
         }
-    }
-
-    private fun isSoundEnabled(): Boolean {
-        return userStats.value?.soundEnabled ?: true
-    }
-
-    private fun isHapticEnabled(): Boolean {
-        return userStats.value?.hapticEnabled ?: true
-    }
-
-    private fun playInteractionEffects(context: Context) {
-        if (isSoundEnabled()) {
-            SoundEffectPlayer.playTap()
-        }
-        if (isHapticEnabled()) {
-            hapticController.vibrate(context, 30)
-        }
-    }
-
-    class Factory(
-        private val repository: GameRepository,
-        private val adController: AdController,
-        private val hapticController: HapticController
-    ) : ViewModelProvider.Factory {
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            @Suppress("UNCHECKED_CAST")
-            return GameViewModel(repository, adController, hapticController) as T
-        }
-    }
-
-    fun getHistoryForLevel(levelId: Int, isDaily: Boolean): Flow<List<LevelAttemptHistory>> {
-        return repository.getHistoryForLevel(levelId, isDaily)
-    }
-
-    fun getAllHistory(): Flow<List<LevelAttemptHistory>> {
-        return repository.getAllHistory()
     }
 
     override fun onCleared() {
-        if (!winState.value && boardState.value != null) {
-            saveJob?.cancel()
-            val board = boardState.value ?: return
-            val snapshot = engineState.initialBoardSnapshot ?: return
-            kotlinx.coroutines.runBlocking {
-                repository.saveActiveGame(
-                    ActiveGameSave(
-                        levelId = levelId.value, gridSize = gridSize.value, par = par.value,
-                        movesCount = movesCount.value,
-                        boardStateString = SaveManager.serializeBoard(board),
-                        initialBoardSnapshotString = SaveManager.serializeBoard(snapshot),
-                        secondsElapsed = secondsElapsed.value,
-                        isDailyChallenge = isDailyChallenge.value,
-                        dailyDateKey = dailyDateKey.value,
-                        gameDifficulty = gameDifficulty.value.name,
-                        historyStackString = SaveManager.serializeHistory(engineState.historyStack)
-                    )
-                )
-            }
-        }
+        timer.pause()
         super.onCleared()
     }
 }

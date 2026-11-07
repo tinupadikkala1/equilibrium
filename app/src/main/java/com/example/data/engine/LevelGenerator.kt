@@ -26,14 +26,11 @@ data class Level(
 
 object LevelGenerator {
 
-    fun generateDailyLevel(dateKey: Int): Level {
-        val size = if (dateKey % 2 == 0) 4 else 5
-        val minScramble = if (size == 4) 6 else 8
-        val maxScramble = if (size == 4) 9 else 11
-        return generateWithParameters(dateKey, size, minScramble, maxScramble)
-    }
+    fun generateLevel(levelId: Int): Level = generateWithWitness(levelId).first
 
-    fun generateLevel(levelId: Int): Level {
+    /** Includes the inverse scramble so solvability can be checked without a heuristic. */
+    fun generateWithWitness(levelId: Int): Pair<Level, List<Pair<Int, Int>>> {
+        require(levelId > 0) { "Stage IDs start at one" }
         // Set parameters based on level range
         val size: Int
         val minScramble: Int
@@ -81,7 +78,7 @@ object LevelGenerator {
         return generateWithParameters(levelId, size, minScramble, maxScramble)
     }
 
-    private fun generateWithParameters(levelId: Int, size: Int, minScramble: Int, maxScramble: Int, attempt: Int = 0): Level {
+    private fun generateWithParameters(levelId: Int, size: Int, minScramble: Int, maxScramble: Int, attempt: Int = 0): Pair<Level, List<Pair<Int, Int>>> {
         val random = Random(levelId.toLong() * 98765L + attempt * 12345L + size * 777L)
         
         // Step 1: Start with target level 5
@@ -90,10 +87,12 @@ object LevelGenerator {
         val totalMoves = random.nextInt(maxScramble - minScramble + 1) + minScramble
         
         // Step 2: Scramble from the solved state (apply reverse tap)
+        val witness = mutableListOf<Pair<Int, Int>>()
         for (i in 0 until totalMoves) {
             val r = random.nextInt(size)
             val c = random.nextInt(size)
             GameRules.applyReverseTap(board, r, c)
+            witness.add(Pair(r, c))
         }
         
         // Step 3: Check if accidentally solved
@@ -111,17 +110,17 @@ object LevelGenerator {
             if (attempt >= 10) {
                 // Fallback: apply one extra reverse tap to guarantee non-uniform board
                 GameRules.applyReverseTap(board, 0, 0)
-                return Level(levelId = levelId, size = size, par = 1, board = board)
+                return Pair(Level(levelId = levelId, size = size, par = 1, board = board), listOf(Pair(0, 0)))
             }
             return generateWithParameters(levelId, size, minScramble, maxScramble, attempt + 1)
         }
         
-        return Level(
+        return Pair(Level(
             levelId = levelId,
             size = size,
             par = totalMoves,
             board = board
-        )
+        ), witness.asReversed())
     }
 
 }
