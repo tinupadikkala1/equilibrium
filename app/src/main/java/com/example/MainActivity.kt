@@ -6,7 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -19,7 +18,6 @@ import com.example.sound.AmbientMusicPlayer
 import com.example.sound.SoundEffectPlayer
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.GameScreen
-import com.example.ui.screens.DifficultySelectScreen
 import com.example.ui.theme.EquilibriumTheme
 import com.example.platform.AdController
 import com.example.ui.viewmodel.GameViewModel
@@ -43,7 +41,6 @@ class MainActivity : ComponentActivity() {
             // Observe live Room database stats
             val userStats by viewModel.userStats.collectAsState()
             val levelProgressList by viewModel.allProgress.collectAsState()
-            val dailyProgressList by viewModel.allDailyProgress.collectAsState()
             val activeGameSave by viewModel.activeGameSave.collectAsState()
             val allHistory by viewModel.getAllHistory().collectAsState(initial = emptyList())
 
@@ -77,16 +74,13 @@ class MainActivity : ComponentActivity() {
                         HomeScreen(
                             userStats = userStats,
                             levelProgressList = levelProgressList,
-                            dailyProgressList = dailyProgressList,
                             activeGameSave = activeGameSave,
                             allHistory = allHistory,
                             onSelectLevel = { levelNum ->
                                 viewModel.loadLevel(levelNum, startWithCurrentDifficulty = false)
-                                navController.navigate("difficulty_select")
-                            },
-                            onSelectDailyLevel = { dateKey ->
-                                viewModel.loadDailyChallenge(dateKey, startWithCurrentDifficulty = false)
-                                navController.navigate("difficulty_select")
+                                navController.navigate("game") {
+                                    popUpTo("home") { saveState = false }
+                                }
                             },
                             onResumeGame = {
                                 viewModel.resumeActiveGame()
@@ -110,26 +104,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Difficulty Selection Screen Route
-                    composable("difficulty_select") {
-                        val levelId by viewModel.levelId.collectAsState()
-                        val isDailyChallenge by viewModel.isDailyChallenge.collectAsState()
-
-                        DifficultySelectScreen(
-                            levelId = levelId,
-                            isDailyChallenge = isDailyChallenge,
-                            onSelectDifficulty = { difficulty ->
-                                viewModel.startGameWithDifficulty(difficulty)
-                                navController.navigate("game") {
-                                    popUpTo("home") { saveState = false }
-                                }
-                            },
-                            onBack = {
-                                navController.popBackStack()
-                            }
-                        )
-                    }
-
                     // Active Puzzle Game Screen Stage
                     composable("game") {
                         val levelId by viewModel.levelId.collectAsState()
@@ -142,25 +116,11 @@ class MainActivity : ComponentActivity() {
                         val highlightedCell by viewModel.highlightedHintCell.collectAsState()
                         val secondsElapsed by viewModel.secondsElapsed.collectAsState()
                         val hintsUsedThisLevel by viewModel.hintsUsedThisLevel.collectAsState()
-                        val isDailyChallenge by viewModel.isDailyChallenge.collectAsState()
-                        val dailyDateKey by viewModel.dailyDateKey.collectAsState()
-                        val dailyProgressList by viewModel.allDailyProgress.collectAsState()
-                        val bestTimeSeconds = if (isDailyChallenge) {
-                            dailyProgressList.find { it.dateKey == dailyDateKey }?.timeTakenSeconds ?: 0
-                        } else {
-                            levelProgressList.find { it.levelId == levelId }?.bestTimeSeconds ?: 0
-                        }
-                        val previousBestMoves = if (isDailyChallenge) {
-                            dailyProgressList.find { it.dateKey == dailyDateKey }?.movesTaken ?: 0
-                        } else {
-                            levelProgressList.find { it.levelId == levelId }?.bestMoves ?: 0
-                        }
-
-                        val difficultyMode by viewModel.gameDifficulty.collectAsState()
+                        val bestTimeSeconds = viewModel.bestTimeSeconds
+                        val previousBestMoves = viewModel.previousBestMoves
+                        val difficultyMode = viewModel.gameDifficulty.collectAsState()
                         val countdownSecondsLeft by viewModel.countdownSecondsLeft.collectAsState()
                         val isTimeUp by viewModel.isTimeUp.collectAsState()
-                        val zenHintsRemaining by viewModel.zenHintsRemaining.collectAsState()
-                        val zenHintAdRequired by viewModel.zenHintAdRequired.collectAsState()
 
                         val onCellTapped = remember(viewModel) { { r: Int, c: Int -> viewModel.tapCell(r, c, this@MainActivity) } }
                         val onUndo = remember(viewModel) { { viewModel.undoMove() } }
@@ -170,11 +130,10 @@ class MainActivity : ComponentActivity() {
                         val onToggleSound = remember(viewModel) { { enabled: Boolean -> viewModel.toggleSoundValue(enabled) } }
                         val onToggleHaptic = remember(viewModel) { { enabled: Boolean -> viewModel.toggleHapticValue(enabled) } }
                         val onNextLevel = remember(viewModel) { { viewModel.loadNextLevel() } }
-                        val onChangeDifficulty = remember(viewModel) { { diff: GameViewModel.Difficulty -> viewModel.startGameWithDifficulty(diff) } }
                         val onEarnReward = remember(viewModel) { { type: String, amount: Int -> viewModel.earnReward(type, amount) } }
                         val onShowRewardedAd = remember(adController) { { type: String, onRewardEarned: (Int) -> Unit -> adController.showRewarded(this@MainActivity, onRewardEarned, {}) } }
                         val onShowInterstitialAd = remember(adController) { { onClosed: () -> Unit -> adController.showInterstitial(this@MainActivity, onClosed) } }
-                        val onBack = remember(navController) { { navController.popBackStack(); Unit } }
+                        val onBack = remember(navController) { { navController.popBack_stack; Unit } }
 
                         GameScreen(
                             levelId = levelId,
@@ -190,7 +149,6 @@ class MainActivity : ComponentActivity() {
                             hintsUsedThisLevel = hintsUsedThisLevel,
                             bestTimeSeconds = bestTimeSeconds,
                             previousBestMoves = previousBestMoves,
-                            isDailyChallenge = isDailyChallenge,
                             difficultyMode = difficultyMode,
                             countdownSecondsLeft = countdownSecondsLeft,
                             isTimeUp = isTimeUp,
@@ -202,13 +160,9 @@ class MainActivity : ComponentActivity() {
                             onToggleSound = onToggleSound,
                             onToggleHaptic = onToggleHaptic,
                             onNextLevel = onNextLevel,
-                            onChangeDifficulty = onChangeDifficulty,
                             onEarnReward = onEarnReward,
                             onShowRewardedAd = onShowRewardedAd,
                             onShowInterstitialAd = onShowInterstitialAd,
-                            zenHintsRemaining = zenHintsRemaining,
-                            zenHintAdRequired = zenHintAdRequired,
-                            onZenHintAdWatched = { viewModel.onZenHintAdWatched() },
                             onBack = onBack
                         )
                     }

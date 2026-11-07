@@ -23,7 +23,7 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
         GameRepository(
             levelProgressDao = database.levelProgressDao(),
             userStatsDao = database.userStatsDao(),
-            dailyChallengeDao = database.dailyChallengeDao(),
+             = database.(),
             activeGameSaveDao = database.activeGameSaveDao(),
             levelAttemptHistoryDao = database.levelAttemptHistoryDao()
         )

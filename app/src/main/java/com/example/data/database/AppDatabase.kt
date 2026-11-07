@@ -8,14 +8,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [LevelProgress::class, UserStats::class, DailyChallengeProgress::class, ActiveGameSave::class, LevelAttemptHistory::class],
+    entities = [LevelProgress::class, UserStats::class, ActiveGameSave::class, LevelAttemptHistory::class],
     version = 7,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun levelProgressDao(): LevelProgressDao
     abstract fun userStatsDao(): UserStatsDao
-    abstract fun dailyChallengeDao(): DailyChallengeDao
     abstract fun activeGameSaveDao(): ActiveGameSaveDao
     abstract fun levelAttemptHistoryDao(): LevelAttemptHistoryDao
 

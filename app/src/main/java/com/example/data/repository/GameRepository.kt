@@ -4,8 +4,6 @@ import com.example.data.database.LevelProgress
 import com.example.data.database.LevelProgressDao
 import com.example.data.database.UserStats
 import com.example.data.database.UserStatsDao
-import com.example.data.database.DailyChallengeDao
-import com.example.data.database.DailyChallengeProgress
 import com.example.data.database.ActiveGameSave
 import com.example.data.database.ActiveGameSaveDao
 import com.example.data.database.LevelAttemptHistory
@@ -17,13 +15,11 @@ import java.util.Calendar
 class GameRepository(
     private val levelProgressDao: LevelProgressDao,
     private val userStatsDao: UserStatsDao,
-    private val dailyChallengeDao: DailyChallengeDao,
     private val activeGameSaveDao: ActiveGameSaveDao,
     private val levelAttemptHistoryDao: LevelAttemptHistoryDao
 ) {
     val allLevelProgress: Flow<List<LevelProgress>> = levelProgressDao.getAllLevelProgress()
-    val allDailyProgress: Flow<List<DailyChallengeProgress>> = dailyChallengeDao.getAllDailyProgress()
-    val userStatsFlow: Flow<UserStats?> = userStatsDao.getUserStatsFlow()
+    // removed: allDailyProgress (daily challenge)
 
     suspend fun getActiveGameSave(): ActiveGameSave? = activeGameSaveDao.getActiveGameSave()
 
@@ -101,32 +97,6 @@ class GameRepository(
         return userStatsDao.decrementHint() > 0
     }
 
-    suspend fun useZenHint(): Boolean {
-        val stats = getOrCreateUserStats()
-        val todayEpochDay = (System.currentTimeMillis() / (24 * 60 * 60 * 1000)).toInt()
-        val usedToday = if (stats.zenHintsLastResetDay == todayEpochDay) stats.zenHintsUsedToday else 0
-        if (usedToday < 10) {
-            userStatsDao.insertOrUpdate(stats.copy(zenHintsUsedToday = usedToday + 1, zenHintsLastResetDay = todayEpochDay))
-            return true
-        }
-        return false
-    }
-
-    suspend fun getZenHintsRemaining(): Int {
-        val stats = getOrCreateUserStats()
-        val todayEpochDay = (System.currentTimeMillis() / (24 * 60 * 60 * 1000)).toInt()
-        val usedToday = if (stats.zenHintsLastResetDay == todayEpochDay) stats.zenHintsUsedToday else 0
-        return (10 - usedToday).coerceAtLeast(0)
-    }
-
-    suspend fun addZenHints(amount: Int) {
-        val stats = getOrCreateUserStats()
-        val todayEpochDay = (System.currentTimeMillis() / (24 * 60 * 60 * 1000)).toInt()
-        val usedToday = if (stats.zenHintsLastResetDay == todayEpochDay) stats.zenHintsUsedToday else 0
-        val newUsed = (usedToday - amount).coerceAtLeast(0)
-        userStatsDao.insertOrUpdate(stats.copy(zenHintsUsedToday = newUsed, zenHintsLastResetDay = todayEpochDay))
-    }
-
     suspend fun addHints(amount: Int) {
         userStatsDao.addHints(amount)
     }
@@ -189,42 +159,11 @@ class GameRepository(
     }
 
     suspend fun saveDailyProgress(dateKey: Int, completed: Boolean, movesTaken: Int, timeTakenSeconds: Int, stars: Int) {
-        val existing = dailyChallengeDao.getDailyProgress(dateKey)
-        val bestMoves = if (existing == null) {
-            movesTaken
-        } else {
-            if (existing.movesTaken == 0) movesTaken else minOf(existing.movesTaken, movesTaken)
-        }
-        val maxStars = if (existing == null) {
-            stars
-        } else {
-            maxOf(existing.stars, stars)
-        }
-        val bestTime = if (existing == null) {
-            timeTakenSeconds
-        } else {
-            if (existing.timeTakenSeconds == 0) {
-                timeTakenSeconds
-            } else if (timeTakenSeconds == 0) {
-                existing.timeTakenSeconds
-            } else {
-                minOf(existing.timeTakenSeconds, timeTakenSeconds)
-            }
-        }
-
-        dailyChallengeDao.insertOrUpdate(
-            DailyChallengeProgress(
-                dateKey = dateKey,
-                completed = completed,
-                movesTaken = bestMoves,
-                timeTakenSeconds = bestTime,
-                stars = maxStars
-            )
-        )
+        // Daily challenge removed - record as regular level attempt
         levelAttemptHistoryDao.insertAttempt(
             LevelAttemptHistory(
                 levelId = dateKey,
-                isDaily = true,
+                isDaily = false,
                 movesTaken = movesTaken,
                 timeTakenSeconds = timeTakenSeconds,
                 stars = stars
@@ -234,7 +173,6 @@ class GameRepository(
 
     suspend fun clearAllProgressAndResetStats() {
         levelProgressDao.deleteAll()
-        dailyChallengeDao.deleteAll()
         activeGameSaveDao.deleteActiveGameSave()
         val defaultStats = UserStats(
             id = 1,

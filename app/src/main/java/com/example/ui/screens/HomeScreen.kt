@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.database.LevelProgress
 import com.example.data.database.UserStats
-import com.example.data.database.DailyChallengeProgress
 import com.example.data.engine.LevelGenerator
 import com.example.ui.components.AdmobBanner
 import com.example.ui.theme.*
@@ -40,11 +39,11 @@ import com.example.ui.theme.*
 fun HomeScreen(
     userStats: UserStats?,
     levelProgressList: List<LevelProgress>,
-    dailyProgressList: List<DailyChallengeProgress>,
+    
     activeGameSave: com.example.data.database.ActiveGameSave?,
     allHistory: List<com.example.data.database.LevelAttemptHistory>,
     onSelectLevel: (Int) -> Unit,
-    onSelectDailyLevel: (Int) -> Unit,
+    
     onResumeGame: () -> Unit,
     onSwitchTheme: (String) -> Unit,
     onToggleSound: (Boolean) -> Unit,
